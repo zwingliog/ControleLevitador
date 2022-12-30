@@ -21,8 +21,8 @@ int ImaxMAXgeral = 399-144*(TIPOTimer==12);
 int DeltaOCR = 1;
 float faseAtual = 0.0;
 float faseAtualReal = 0.0;
-bool potAtual = true;
-boolean oldFF = false;
+int potAtual = 1;
+bool oldFF = false;
 float DelayT = 10.0;
 
 byte pinEnA = 5;
