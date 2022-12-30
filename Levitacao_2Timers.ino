@@ -5,6 +5,7 @@
 //                 [10 = not 9 ] e [3 = not 11]
 //                 para nao precisar de inversor externo
 
+// versao de 30/12/2022 (diversas mudancas para preparar versao 1.0)
 // versao de 22/12/2022 (inclusao da funcao jaTerminou)
 // versao de 03/12/2022 (Controles A e B nas portas A0 e A1)
 // versao de 28/11/2022 (ativado a opcao dos controles A e B)
@@ -14,6 +15,7 @@
 #define TIME_OUT  5
 byte TIPOTimer = 1;
 int Imax = 199; // calculo preve 199 para 40kHz e 319 para 25kHz
+int fatorImax = 1; // fator multiplicativo do Imax para Timer2 (8-bits)
 int ImaxMIN = 99;
 int ImaxMAX = 399-144*(TIPOTimer==12);
 int ImaxMINgeral = 99;
@@ -25,13 +27,16 @@ int potAtual = 1;
 bool oldFF = false;
 float DelayT = 10.0;
 
+bool TemINPUT = false;
+bool MostraTudo = true;
+float DtZeroPadrao = 0.01;
+
 byte pinEnA = 5;
 byte pinEnB = 6;
-byte pinExecutandoAcao = 4;
-byte pinControleA = A0;
-byte pinControleB = A1;
-bool valorControleA = LOW;
-bool valorControleB = LOW;
+byte nControles = 6;
+byte pinControle[6] = {A0, A1, A2, A3, A4, A5};
+bool valorControle[6] = {LOW, LOW, LOW, LOW, LOW, LOW};
+bool modoControle[6] = {OUTPUT, OUTPUT, OUTPUT, OUTPUT, OUTPUT, OUTPUT};
 
 // ------------- SETUP ---------------- SETUP -------------------
 void setup() {
@@ -42,16 +47,13 @@ void setup() {
   configuraTimer();
   pinMode( pinEnA, OUTPUT);
   pinMode( pinEnB, OUTPUT);
-  mudaPot( potAtual, false );
-  pinMode( pinExecutandoAcao, OUTPUT );
-  digitalWrite( pinExecutandoAcao, LOW );
-  pinMode( pinControleA, OUTPUT );
-  digitalWrite( pinControleA, valorControleA );
-  pinMode( pinControleB, OUTPUT );
-  digitalWrite( pinControleB, valorControleB );
-  
+  mudaPot( potAtual );
+  for (int qControle=0; qControle<nControles; qControle++){
+    pinMode( pinControle[qControle], modoControle[qControle] );
+    digitalWrite( pinControle[qControle], valorControle[qControle] );
+  }  
   Serial.println( F("Levitacao 2 Timers") );
-  Serial.println( F("22 dezembro 2022") );
+  Serial.println( F("30 dezembro 2022") );
   Serial.print( F("usando TIPOTimer = ") );
   Serial.println( TIPOTimer );
   Serial.println( F("digite h para help") );
@@ -59,96 +61,88 @@ void setup() {
   Serial.print( F(" (") );
   Serial.print( 8000.0/(Imax+1) );
   Serial.println( F("kHz)") );
-
 }
+// ---------- end of SETUP ---------------- end of SETUP ---------------
+
 
 
 // ------------- LOOP ---------------- LOOP ------------------------
 void loop() {
-  
-   if ( Serial.available()>0 ){
-//    byte Sp = Serial.peek();
+  if (Serial.available()>0){
+    TemINPUT = true;
+  }
+  if ( TemINPUT ){
     byte Sp = removeEspaco();
-    if ( (Sp==10)||(Sp==13)||(Sp==',')||(Sp==';') ){
-      Serial.read();
+    if ( (Sp==10) || (Sp==13) || (Sp==',') || (Sp==';') ){
+      removeEspaco(Sp);
 
-
-      
-    }else if((Sp=='w')||(Sp=='W')){ // w -> wait 
-      Serial.read();
+    }else if( (Sp=='w') || (Sp=='W') ){ // w -> wait 
+      removeEspaco(Sp);
       float newDelayT = 0;
-      if (removeEspaco()=='*'){
-        removeEspaco('*',',');
+      if (jaTerminou()){
+        removeEspaco(';');
       }else{
-        if (jaTerminou()){
-          removeEspaco(';');
-        }else{
-          newDelayT = Serial.parseFloat();
-        }
-        if ( (Sp=='W') && (newDelayT>0) ){
-          DelayT = newDelayT;
-          Serial.print( F("new DelayT = ") );
-          Serial.println( DelayT );
-        }
+        newDelayT = myParseFloat();
+      }
+      if ( (Sp=='W') && (newDelayT>0) && (MostraTudo) ){
+        DelayT = newDelayT;
+        Serial.print( F("DelayT = ") );
+        Serial.print( DelayT );
+        Serial.println( F(" ms") );
       }
       if (newDelayT==0)
         newDelayT = DelayT;
       if (newDelayT>0){
-        unsigned long t0 = micros();
-        unsigned long Limite = t0 + (1000*newDelayT);
+        unsigned long Limite = micros() + (1000uL*newDelayT);
         while( micros()<Limite ){}
-        Serial.println( (char)Sp);
+        if (MostraTudo)
+          Serial.println( (char)Sp );
       }
 
 
       
     }else if(Sp=='?'){ // ?-> status
-      Serial.read();
+      removeEspaco(Sp);
       mostraStatus();
       
 
 
-    }else if((Sp=='P')||(Sp=='p')){
-      Serial.read();
+    }else if( (Sp=='p') || (Sp=='P') ){
+      removeEspaco(Sp);
       if (!jaTerminou()){
-        int newP = Serial.parseInt();
-        mudaPot( newP, (Sp=='p'), true );
-        executandoAcao( false );
+        int newP = myParseInt();
+        mudaPot( newP );
       }else{
         removeEspaco(';');
       }
 
 
-    }else if((Sp=='F')||(Sp=='f')){
-      Serial.read();
+    }else if( (Sp=='f') || (Sp=='F') ){
+      removeEspaco(Sp);
       if (!jaTerminou()){
-        float newF;
+        float newF = 0.;
         if ( removeEspaco()=='*' ){
           removeEspaco('*');
-          newF = Serial.parseFloat() + faseAtual;
-        }else{
-          newF = Serial.parseFloat();        
+          newF = faseAtual;
         }
-        mudaFase( newF, (Sp=='f'), true );
-        executandoAcao( false );
+        newF += myParseFloat();
+        mudaFase( newF, (Sp=='F') );
       }else{
         removeEspaco(';');
       }
 
 
 
-    }else if((Sp=='o')||(Sp=='O')){ // o-> on-off cycles : o DtOff, Dt, nCiclos      
-      Serial.read();
+    }else if( (Sp=='o') || (Sp=='O') ){ // o-> on-off cycles : o DtOff, Dt, nCiclos
+      removeEspaco(Sp);
       Serial.println( (char)Sp );
-      float DtOff;
-      if (jaTerminou()){
-        DtOff = 0;
-      }else{
+      float DtOff = 0;
+      if (!jaTerminou()){
         if (removeEspaco()=='*'){
           removeEspaco( '*' );
-          DtOff=DelayT;
+          DtOff = DelayT;
         }else{
-          DtOff = Serial.parseFloat();
+          DtOff = myParseFloat();
         }
       }
       if (DtOff==0)
@@ -160,7 +154,7 @@ void loop() {
         Dt = 0;
         nCiclos = 1;
       }else{
-        Dt = Serial.parseFloat();
+        Dt = myParseFloat();
         if (removeEspaco(',')=='*'){
           nCiclos = 1;
           removeEspaco( '*' );
@@ -169,91 +163,79 @@ void loop() {
             removeEspaco(';');
             nCiclos=1;
           }else{
-            nCiclos = Serial.parseInt();
+            nCiclos = myParseInt();
             if (nCiclos==0)
               nCiclos=1;
           }
         }
       }
-      onOffCycles(DtOff, Dt, nCiclos, 0.05);
-      Serial.println(".");
+      fazOnOffCycles(DtOff, Dt, nCiclos, DtZeroPadrao);
+      if (MostraTudo)
+        Serial.println(".");
 
       
 
-    }else if((Sp=='j')||(Sp=='J')){ // j-> jump : j DF, Dt, nJumps      
-      Serial.read();
+    }else if( (Sp=='j') || (Sp=='J') ){ // j-> jump : j DF, Dt, nJumps      
+      removeEspaco(Sp);
       if (!jaTerminou()){
         Serial.println( (char)Sp );
         float DF;
-        float Dt;
-        int nJumps;
-        DF = Serial.parseInt();
+        float Dt = 0;
+        int nJumps = 1;
+        DF = myParseInt();
         if (jaTerminou()){
           removeEspaco(';');
-          Dt = 0;
-          nJumps = 1;
         }else{
           if (removeEspaco()=='*'){
-            Dt = DelayT;
             removeEspaco('*');
+            Dt = DelayT;
           }else{
-            Dt = Serial.parseFloat();
+            Dt = myParseFloat();
             if (Dt==0)
               Dt = DelayT;
           }
           if (jaTerminou()){
             removeEspaco(';');
-            nJumps = 1;
           }else{
-            nJumps = Serial.parseInt();
+            nJumps = myParseInt();
             if (nJumps==0)
               nJumps = 1;
           }
         }
-        bool Mostra = (nJumps<=50)&&(Sp=='j');
-        //jumps(float DF, float Dt, int nJumps, bool Mostra, float DtZero)
-        jumps( DF, Dt, nJumps, Mostra, 0.05);
+        bool Mostra = (nJumps<=50) && (Sp=='J');
+        //fazJumps(float DF, float Dt, int nJumps, bool Mostra, float DtZero)
+        fazJumps( DF, Dt, nJumps, Mostra, DtZeroPadrao);
         Serial.println(".");
       }else{
         removeEspaco(';');
       }
       
 
-    }else if((Sp=='s')||(Sp=='S')||(Sp=='u')||(Sp=='U')||
-                    (Sp=='d')||(Sp=='D')||(Sp=='c')||(Sp=='C')){ 
-      Serial.read();
+    }else if( (Sp=='s') || (Sp=='S') || (Sp=='u') || (Sp=='U')||
+                    (Sp=='d') || (Sp=='D') ){ 
+      removeEspaco(Sp);
       if (!jaTerminou()){
         Serial.println( (char)Sp );
-        float Fini, Ffin;
-        int nC = 1;
-        if ((Sp=='s')||(Sp=='S')){ // s -> steps: s,Fini,Ffin,Steps,Dt
+        float Fini = 0.;
+        float Ffin = 0.;
+        if ( (Sp=='s') || (Sp=='S') ){ // s -> steps: s,Fini,Ffin,Steps,Dt
           if (removeEspaco()=='*'){
             Fini = faseAtual;
             removeEspaco('*');
           } else {
-            Fini = Serial.parseFloat();
+            Fini = myParseFloat();
           }
           if (removeEspaco(',')=='*'){
             removeEspaco('*');
-            Ffin = Serial.parseFloat() + Fini;
-          }else{
-            Ffin = Serial.parseFloat();          
+            Ffin = Fini;
           }
-        }else if ((Sp=='u')||(Sp=='U')){ // u -> up: u,Steps,Dt
+            Ffin += myParseFloat();
+        }else if ( (Sp=='u') || (Sp=='U') ){ // u -> up: u,Steps,Dt
           Fini = faseAtual;
           Ffin = faseAtual+360.0;
-        }else if ((Sp=='d')||(Sp=='D')){ // d -> down : d,Steps,Dt
+        }else if ( (Sp=='d') || (Sp=='D') ){ // d -> down : d,Steps,Dt
           Fini = faseAtual;
           Ffin = faseAtual-360.0;        
-        }else if((Sp=='c')||(Sp=='C')){ // c -> cycles : c,Steps,Dt,nC
-            Fini = faseAtual;
-          if (removeEspaco()=='-'){
-            Ffin = faseAtual - 360.0;
-            removeEspaco('-');
-          }else{
-            Ffin = faseAtual + 360.0;
-          }
-          nC = 0;
         }
       
         int Steps;
@@ -262,7 +244,6 @@ void loop() {
           removeEspaco(';');
           Steps = (Imax+1)*(abs(Ffin-Fini)/360.0);
           Dt = DelayT;
-          nC = 2-nC;
         }else{
           if (removeEspaco(',')=='#'){
               removeEspaco('#');
@@ -271,7 +252,7 @@ void loop() {
               removeEspaco('$');
               Steps = (Imax+1)*(abs(Ffin-Fini)/360.0);
           }else{
-            Steps = Serial.parseInt();
+            Steps = myParseInt();
           }
           if (removeEspaco(',')=='*'){
             Dt = DelayT;
@@ -280,100 +261,38 @@ void loop() {
             if (jaTerminou()){
               removeEspaco(';');
               Dt = DelayT;
-              nC = 2-nC;
             }
-            Dt = Serial.parseFloat();
+            Dt = myParseFloat();
             if (Dt==0)
               Dt = DelayT;        
           }
-          if (nC==0){
-            if (jaTerminou())
-              removeEspaco(';');
-            else
-              nC = Serial.parseInt();
-            if (nC==0)
-              nC = 2;
-          }
         }
-        //cycles(float Fini, float Ffin, int Steps, int nC, float Dt, bool Mostra, float DtZero)
-        bool Mostra = ( (Steps*nC<=20)&&((Sp=='s')||(Sp=='u')||(Sp=='d')||(Sp=='c')) );
-        cycles(Fini, Ffin, Steps, nC, Dt, Mostra, 0.05);
-        Serial.println(".");
+        //fazSteps(float Fini, float Ffin, int Steps, float Dt, bool Mostra, float DtZero)
+        bool Mostra = ( ( Steps<=20 )&&( (Sp=='S') || (Sp=='U') || (Sp=='D') ) );
+        fazSteps(Fini, Ffin, Steps, Dt, Mostra, DtZeroPadrao);
+        if (Mostra)
+          Serial.println(".");
       }else{
         removeEspaco(';');
       }
   
 
-    }else if ((Sp=='+')||(Sp=='=')||(Sp=='-')||(Sp=='i')||(Sp=='I')||(Sp=='k')||(Sp=='K')){
-      Serial.read();
+    }else if ( (Sp=='i') || (Sp=='I') ){
+      removeEspaco(Sp);
       bool mudouImax = false;
-      int ImaxIni = 0;
-      int ImaxFin = 0;
-      float DtWaitImax = 0;
-      if ( (Sp=='+')||(Sp=='=') ){
-        mudouImax = true;
-        ImaxIni = (Imax<ImaxMAX)? Imax+1 : ImaxMIN;
-      }else if(Sp=='-'){
-        mudouImax = true;
-        ImaxIni = (Imax>ImaxMIN)? Imax-1 : ImaxMAX;
-      }else if((Sp=='i')||(Sp=='I')){
-        if (jaTerminou()){
-          removeEspaco(';');
-          mudouImax = false;
-        }else{
-          int newImax = Serial.parseInt();
-          if ((newImax>=ImaxMINgeral)&&(newImax<=ImaxMAXgeral)){
-            ImaxIni = newImax;
-            mudouImax = true;
-          }
-        }
-      }else if((Sp=='k')||(Sp=='K')){
-        //"scan in Imax [ k ImaxIni ImaxFin Dt ]"
-        if (jaTerminou()){
-          removeEspaco(';');
-          mudouImax = false;
-        }else{
-          if (removeEspaco()=='*'){
-            ImaxIni = Imax;
-            removeEspaco('*');
-          }else{
-            ImaxIni = Serial.parseInt();
-          }
-          if (jaTerminou()){
-            removeEspaco(';');
-            mudouImax = false;
-          }else{
-            ImaxFin = Serial.parseInt();
-            if (jaTerminou()){
-              removeEspaco(';');
-              DtWaitImax = DelayT;
-            }else{
-              if (removeEspaco(',')=='*'){
-                DtWaitImax = DelayT;
-                removeEspaco('*');
-              }else{
-                DtWaitImax = Serial.parseFloat();
-                if (DtWaitImax==0)
-                  DtWaitImax = DelayT;
-              }
-            }
-            if ( (ImaxIni>=ImaxMINgeral) && (ImaxFin>=ImaxMINgeral) &&
-                 (ImaxIni<=ImaxMAXgeral) && (ImaxFin<=ImaxMAXgeral) ){ 
-              mudouImax = true;
-              Serial.println(char(Sp));
-            }
-          }
+      int newImax = 0;
+      if (jaTerminou()){
+        removeEspaco(';');
+      }else{
+        newImax = myParseInt();
+        if ( (newImax>=ImaxMINgeral) && (newImax<=ImaxMAXgeral) ){
+          mudouImax = true;
         }
       }
-      if ( (mudouImax) && (ImaxFin==0) ){
-        ImaxFin = ImaxIni;
-      }
-      int deltaImax = (ImaxFin>=ImaxIni)? (+1): (-1);
       if ( mudouImax ){
-        bool Mostra = ((Sp!='I') && (Sp!='K'));
-        //mudancasImax(int ImaxIni, int ImaxFin, int deltaImax, float DtWaitImax, bool Mostra, float DtZero)
-        mudancasImax(ImaxIni, ImaxFin, deltaImax, DtWaitImax, Mostra, 0.05);
-        if ( (Sp!='I') && (Sp!='K') ){
+        bool Mostra = (Sp!='I');
+        mudaImax( newImax, faseAtual );
+        if (Mostra){
           Serial.print( Imax );
           Serial.print( " (" );
           Serial.print( 8000.0/(Imax+1) );
@@ -383,45 +302,94 @@ void loop() {
 
 
     }else if(Sp=='h'){
-      Serial.read();
+      removeEspaco(Sp);
       int Nivel=0;
       if (jaTerminou())
         removeEspaco(';');
       else
-        Nivel = Serial.parseInt();
+        Nivel = myParseInt();
       mostraHelpComandos( Nivel!=0 );  
 
 
-    }else if( (Sp=='A')||(Sp=='a')||(Sp=='B')||(Sp=='b') ){
-      Serial.read();
-      int newValue;
-      if (jaTerminou()){
+    }else if( (Sp=='a') || (Sp=='A') ){
+      removeEspaco(Sp);
+      byte qualControle=100;
+      bool newValue;
+      bool newModo;
+      bool mudouValue = false;
+      bool mudouModo = false;
+      if (jaTerminou(1)){
+        qualControle = 0;
+      }else{
+        int newQual = myParseInt();
+        if ( (newQual>=0) && (newQual<nControles) )
+          qualControle = newQual;
+      }
+      if (jaTerminou(1)){
         removeEspaco(';');
-        if ( (Sp=='A')||(Sp=='a') )
-          newValue = !valorControleA;
-        else if ( (Sp=='B')||(Sp=='b') )
-          newValue = !valorControleB;    
-      }else
-        newValue = Serial.parseInt();
-      byte pinControleATU;
-      bool valorControleATU = (newValue==1);
-      if ((Sp=='A')||(Sp=='a')){
-        pinControleATU = pinControleA;
-        valorControleA = valorControleATU;
-      }else if ((Sp=='B')||(Sp=='b')){
-        pinControleATU = pinControleB;
-        valorControleB = valorControleATU;
+        newValue = !valorControle[qualControle];
+        mudouValue = true;
+      }else{
+        Sp = removeEspaco();
+        if ( (Sp=='L')||(Sp=='0') ){
+          newValue = LOW;
+          mudouValue = true;
+        }else if ( (Sp=='H')||(Sp=='1') ){
+          newValue = HIGH;
+          mudouValue = true;
+        }else if (Sp=='I'){
+          newModo = INPUT;
+          mudouModo = true;
+        }else if (Sp=='O'){
+          newModo = OUTPUT;
+          mudouModo = true;
+        }else if (Sp=='*'){
+          newValue = !valorControle[qualControle];
+          mudouValue = true;
+        }
+        removeEspaco(Sp,';');
       }
-      if ((Sp=='a')||(Sp=='b')){
-        Serial.print( (char)Sp );
-        Serial.println( valorControleATU );
+      if ( (qualControle!=100) && ( (mudouValue) || (mudouModo) ) ){
+        if (MostraTudo){
+          Serial.print( F("A") );
+          Serial.print( qualControle );
+          Serial.print( F(":") );
+        }
+        if (mudouModo){
+          modoControle[qualControle] = newModo;
+          pinMode( pinControle[qualControle], modoControle[qualControle] );
+          if (MostraTudo)
+            Serial.println( (newModo==OUTPUT)? "O": "I" );
+        }
+        if (mudouValue){
+          valorControle[qualControle] = newValue;
+          digitalWrite( pinControle[qualControle], valorControle[qualControle] );
+          if (MostraTudo)
+            Serial.println( (newValue==LOW)? "L": "H" );
+        }
       }
-      mudaControle( pinControleATU, valorControleATU );
-    }else{
-      Serial.read();
+    }else{ // Se nao for nenhum comando conhecido
+      removeEspaco(Sp);
     }
-   }
-    
+  }
+
+}
+// ---------- end of LOOP ---------------- end of LOOP ---------------
+
+
+
+
+int myRead(){
+  return Serial.read();
+}
+int myPeek(){
+  return Serial.peek();
+}
+long myParseInt(){
+  return Serial.parseInt();
+}
+float myParseFloat(){
+  return Serial.parseFloat();
 }
 
 
@@ -437,15 +405,14 @@ byte removeEspaco(byte oqueMais1, byte oqueMais2){
   int nextChar;
   bool removendo = true;
   while(removendo){
-    unsigned long t0 = micros();
+    unsigned long tEnd = micros() + TIME_OUT*1000uL;
     do{
-      nextChar = Serial.peek();
-    }while( (nextChar==-1)&&( (micros()-t0)<(TIME_OUT*1000uL) ) );
-//    Serial.println( nextChar );
+      nextChar = myPeek();
+    }while( (nextChar==-1) && (micros()<tEnd) );
     removendo = false;
     if ( (nextChar==' ')||(nextChar==oqueMais1)||(nextChar==oqueMais2) ){
       removendo = true;
-      Serial.read();
+      myRead();
     }
   }
   if (nextChar==-1)
@@ -453,46 +420,24 @@ byte removeEspaco(byte oqueMais1, byte oqueMais2){
   return byte(nextChar);
 }
 
+
 bool jaTerminou(){
+  return jaTerminou(0);
+}
+bool jaTerminou(int Modo){
+  byte endChar0[] = { ';','w','W','p','P',   'f','F','o','j','J',   
+                        '?','h','i','a','A',   's','S','u','U','d',
+                        'D', 10, 13 };
+  byte endChar1[] = { 'O', 'H', 'I' };
   byte pChar = removeEspaco(',');
-  return ( (pChar==';')||(pChar=='=')||(pChar=='+')||(pChar=='-')||
-       (pChar=='w')||(pChar=='W')||(pChar=='p')||(pChar=='P')||
-       (pChar=='f')||(pChar=='F')||(pChar=='o')||(pChar=='O')||
-       (pChar=='j')||(pChar=='J')||(pChar=='s')||(pChar=='S')||
-       (pChar=='u')||(pChar=='u')||(pChar=='d')||(pChar=='d')||
-       (pChar=='c')||(pChar=='C')||(pChar=='h')||(pChar=='H')||
-       (pChar=='i')||(pChar=='I')||(pChar=='k')||(pChar=='K')||
-       (pChar=='a')||(pChar=='A')||(pChar=='b')||(pChar=='B')||
-       (pChar==10)||(pChar==13) );
-}
-
-
-
-void executandoAcao(bool Ativar){
-  if (pinExecutandoAcao==4){
-    if (Ativar)
-      PORTD = PORTD | B00010000;
-    else
-      PORTD = PORTD & B11101111;
-  }else{
-    digitalWrite(pinExecutandoAcao, Ativar);
+  bool achou = false;
+  for ( int nAtu=0; (!achou)&&(nAtu<sizeof(endChar0)); nAtu++ ){
+    achou = (pChar==endChar0[nAtu]);
   }
-}
-
-
-
-void mudaControle( byte pinControleATU, bool Ativar ){
-  if (pinControleATU==A0){
-    if (Ativar)
-      PORTC = PORTC | B00000001;
-    else
-      PORTC = PORTC & B11111110;
-  }else if (pinControleATU==A1){
-    if (Ativar)
-      PORTC = PORTC | B00000010;
-    else
-      PORTC = PORTC & B11111101;
-  }else{
-    digitalWrite(pinControleATU, Ativar);
+  if (Modo!=1){
+    for ( int nAtu=0; (!achou)&&(nAtu<sizeof(endChar1)); nAtu++ ){
+      achou = (pChar==endChar1[nAtu]);
+    }
   }
+  return achou;
 }

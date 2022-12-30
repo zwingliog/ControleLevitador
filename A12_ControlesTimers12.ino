@@ -8,12 +8,12 @@
 // faseAtualReal -> float
 //
 // Usa as funcoes:
-//   executandoAcao()
+//
 // 
 // Contem as seguintes funcoes:
 // configuraTimer12()
 // mudaImax12( int newImax, float oldFase )
-// mudaFase12( float newFase, bool escreve, bool mostraAcao )
+// mudaFase12( float newFase, bool escreve )
 
 void configuraTimer12(){
   // Timer 1 usa os pinos 9 e 10 (OC1A=9, OC1B=10)
@@ -46,11 +46,12 @@ void configuraTimer12(){
   TCCR2B = 1;
 
   // Para sincronizar os contadores
-  mudaFase( faseAtual, false, false );
+  mudaFase( faseAtual, false );
 }
 
 
 void mudaImax12( int newImax, float oldFase ){
+  Imax = newImax;
   noInterrupts();
   GTCCR = 131;
   OCR1A = Imax;
@@ -63,7 +64,7 @@ void mudaImax12( int newImax, float oldFase ){
 }
 
 
-void mudaFase12( float newFase, bool escreve, bool mostraAcao ){
+void mudaFase12( float newFase, bool escreve ){
   //update ocr registers with the value
   int Ip = Imax + 1;
   int Ip2 = 2 * Ip;
@@ -105,9 +106,6 @@ void mudaFase12( float newFase, bool escreve, bool mostraAcao ){
   GTCCR = 0;
   interrupts();
   
-  if (mostraAcao){
-    executandoAcao( true );
-  }
   if (escreve){
     Serial.print( F("f=") );
     Serial.print( newFase );

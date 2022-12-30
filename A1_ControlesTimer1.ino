@@ -8,12 +8,12 @@
 // faseAtualReal -> float
 //
 // Usa as funcoes:
-//   executandoAcao()
+//
 // 
 // Contem as seguintes funcoes:
 // configuraTimer1()
 // mudaImax1( int newImax, float oldFase )
-// mudaFase1( float newFase, bool escreve, bool mostraAcao )
+// mudaFase1( float newFase, bool escreve )
 
 void configuraTimer1(){
   // Timer 1 usa os pinos 9 e 10
@@ -36,7 +36,8 @@ void configuraTimer1(){
 
 
 void mudaImax1( int newImax, float oldFase ){
-  int LimiteImax = newImax-20;
+  Imax = newImax;
+  int LimiteImax = newImax-40;
   while( TCNT1>LimiteImax ){}
   ICR1 = Imax;
   mudaFase( oldFase, false );
@@ -44,7 +45,7 @@ void mudaImax1( int newImax, float oldFase ){
 
 
 
-void mudaFase1( float newFase, bool escreve, bool mostraAcao ){
+void mudaFase1( float newFase, bool escreve ){
     //update ocr registers with the value
     int Ip = Imax + 1;
     int Ip2 = 2 * Ip;
@@ -126,9 +127,6 @@ void mudaFase1( float newFase, bool escreve, bool mostraAcao ){
       newFF = !newFF;
     }
     oldFF = newFF;
-    if (mostraAcao)
-      executandoAcao( true );
-
     if (escreve){
       Serial.print( F("f=") );
       Serial.print( newFase );

@@ -4,21 +4,18 @@
 //   potAtual -> bool
 //
 // Usa as funcoes:
-//   executandoAcao()
+//
 
 
 void mudaFase( float newFase ){
-  mudaFase( newFase, false, false );
+  mudaFase( newFase, false );
 }
 void mudaFase( float newFase, bool escreve ){
-  mudaFase( newFase, escreve, false );
-}
-void mudaFase( float newFase, bool escreve, bool mostraAcao ){
   if (TIPOTimer==12){
-    mudaFase12( newFase, escreve, mostraAcao );
+    mudaFase12( newFase, escreve );
   }
   else if (TIPOTimer==1){
-    mudaFase1( newFase, escreve, mostraAcao );
+    mudaFase1( newFase, escreve );
   }
 }
 
@@ -42,15 +39,6 @@ void configuraTimer(){
 
 
 void mudaPot( int newPot ){
-  mudaPot( newPot, false, false, true ); 
-}
-void mudaPot( int newPot, bool escreve ){
-  mudaPot( newPot, escreve, false, true );
-}
-void mudaPot( int newPot, bool escreve, bool mostraAcao ){
-  mudaPot( newPot, escreve, mostraAcao, true );
-}
-void mudaPot( int newPot, bool escreve, bool mostraAcao, bool Ativar ){
     if ( (pinEnA==5) && (pinEnB==6) ){
       if (newPot==1)
         PORTD = PORTD | B01100000;
@@ -66,14 +54,6 @@ void mudaPot( int newPot, bool escreve, bool mostraAcao, bool Ativar ){
       digitalWrite( pinEnA, (newPot==1)||(newPot==2) );
       if (pinEnB!=pinEnA)
         digitalWrite( pinEnB, (newPot==1)||(newPot==3) );
-    }
-    if (mostraAcao)
-      executandoAcao( Ativar );
-    if  (escreve){
-      if (newPot)
-        Serial.println( F("on") );
-      else
-        Serial.println( F("off") );
     }
     potAtual = newPot;
 }
