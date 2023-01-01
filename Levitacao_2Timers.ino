@@ -5,6 +5,7 @@
 //                 [10 = not 9 ] e [3 = not 11]
 //                 para nao precisar de inversor externo
 
+// versao de 01/01/2023 (usando Strings)
 // versao de 31/12/2022 (ajuste comandos para diferenciar maiusculas e minusculas)
 // versao de 30/12/2022 (diversas mudancas para preparar versao 1.0)
 // versao de 22/12/2022 (inclusao da funcao jaTerminou)
@@ -27,8 +28,8 @@ float faseAtualReal = 0.0;
 int potAtual = 1;
 bool oldFF = false;
 float DelayT = 10.0;
+float DelayTRep = 1000.0;
 
-bool TemINPUT = false;
 bool MostraTudo = true;
 float DtZeroPadrao = 0.01;
 
@@ -38,6 +39,12 @@ byte pinControle[] = {A0, A1, A2, A3, A4, A5};
 bool valorControle[] = {LOW, LOW, LOW, LOW, LOW, LOW};
 bool modoControle[] = {OUTPUT, OUTPUT, OUTPUT, OUTPUT, OUTPUT, OUTPUT};
 const int nControles = sizeof(pinControle)/sizeof(pinControle[0]);
+
+
+String inStr = "";
+bool strOk = false;
+char endChar = 13;
+String endStr = String(endChar);
 
 // ------------- SETUP ---------------- SETUP -------------------
 void setup() {
@@ -54,14 +61,15 @@ void setup() {
     digitalWrite( pinControle[qControle], valorControle[qControle] );
   }  
   Serial.println( F("Levitacao 2 Timers") );
-  Serial.println( F("31 dezembro 2022") );
+  Serial.println( F("1 janeiro 2023") );
   Serial.print( F("usando TIPOTimer = ") );
   Serial.println( TIPOTimer );
   Serial.println( F("digite h para help") );
-  Serial.print( Imax );
-  Serial.print( F(" (") );
-  Serial.print( 8000.0/(Imax+1) );
-  Serial.println( F("kHz)") );
+  mostraImax();
+  mostraFase();
+  mostraPot();
+
+  inStr.reserve(200);
 }
 // ---------- end of SETUP ---------------- end of SETUP ---------------
 
@@ -69,62 +77,82 @@ void setup() {
 
 // ------------- LOOP ---------------- LOOP ------------------------
 void loop() {
-  if (Serial.available()>0){
-    TemINPUT = true;
-  }else{
-    TemINPUT = false;
+  while (Serial.available()>0){
+    addChar();
   }
-  if ( TemINPUT ){
+  if ( (inStr.length()>0) && (inStr.endsWith(endStr)) ){
+    strOk = true;
+  }else{
+    strOk = false;
+  }
+  if ( strOk ){
     byte Sp = removeEspaco();
     if ( (Sp==10) || (Sp==13) || (Sp==',') || (Sp==';') ){
       removeEspaco(Sp);
 
-    }else if(Sp=='w'){ // w -> wait : w [Dt]
+    }else if( (Sp=='w') || (Sp=='W') ){ // w,W - wait
+      // w -> wait : w [Dt]
+      // W -> wait Rep : W [DtRep]
       unsigned long t0 = micros();
-      removeEspaco(Sp);
-      float newDelayT = 0.;
+      myRead();
+      float newDelay = 0.;
       if (!jaTerminou()){
-        newDelayT = myParseFloat();
+        newDelay = myParseFloat();
       }
-      if (newDelayT==0.)
-        newDelayT = DelayT;
-      if (newDelayT>0.){
-        unsigned long Limite = t0 + (1000uL*newDelayT);
+      if (newDelay==0.){
+        if (Sp=='w'){
+          newDelay = DelayT;
+        }else if (Sp=='W'){
+          newDelay = DelayTRep;
+        }
+      }
+      if (newDelay>0.){
+        unsigned long Limite = t0 + (1000uL*newDelay);
         while( micros()<Limite ){}
         if (MostraTudo)
           Serial.println( char(Sp) );
       }
 
-    }else if(Sp=='t'){ // t -> set DelayT : t newDelayT
-      removeEspaco(Sp);
+    }else if( (Sp=='t') || (Sp=='T') ){ // t, T -> set DelayT
+      // t -> set DelayT : t newDelayT
+      // t -> set DelayTRep : t newDelayTRep
+      myRead();
       if (!jaTerminou()){
         float newDelayT = myParseFloat();
         if (newDelayT>0.){
-          DelayT = newDelayT;
-          Serial.print( F("DelayT = ") );
-          Serial.print( DelayT );
-          Serial.println( F(" ms") );
+          if (Sp=='t'){
+            DelayT = newDelayT;
+          }else if (Sp=='T'){
+            DelayTRep = newDelayT;
+          }
+          mostraDelayT();
         }
       }
 
 
       
     }else if(Sp=='?'){ // ?-> status
-      removeEspaco(Sp);
+      myRead();
       mostraStatus();
       
 
 
     }else if(Sp=='p'){
-      removeEspaco(Sp);
+      myRead();
       if (!jaTerminou()){
         int newP = myParseInt();
-        mudaPot( newP );
+        if ( (newP>=0)&&(newP<=3) ){
+          mudaPot( newP );
+          Serial.print( "p" );
+          Serial.println( newP );
+        }
+      }else{
+        mostraPot();
       }
 
 
     }else if(Sp=='f'){
-      removeEspaco(Sp);
+      myRead();
       if (!jaTerminou()){
         float newF = 0.;
         if ( removeEspaco()=='*' ){
@@ -133,15 +161,34 @@ void loop() {
         }
         newF += myParseFloat();
         mudaFase( newF, true );
+      }else{
+        mostraFase();
       }
+  
+
+    }else if (Sp=='i'){
+      myRead();
+      bool mudouImax = false;
+      int newImax = 0;
+      if (jaTerminou()){
+        removeEspaco(';');
+      }else{
+        newImax = myParseInt();
+        if ( (newImax>=ImaxMINgeral) && (newImax<=ImaxMAXgeral) ){
+          mudouImax = true;
+        }
+      }
+      if ( mudouImax ){
+        mudaImax( newImax, faseAtual );
+      }
+      mostraImax();
 
 
 
     }else if( (Sp=='o') || (Sp=='c') ){ 
       // o-> off : o DtOff
-      // c-> on-off cycles : c DtOff, Dt, nCiclos
-      removeEspaco(Sp);
-      Serial.println( char(Sp) );
+      // c-> on-off cycles : c DtOff, DtRep, nCiclos
+      myRead();
       float DtOff = 0;
       if (!jaTerminou()){
         if (removeEspaco()=='*'){
@@ -156,10 +203,14 @@ void loop() {
       }
       if (DtOff==0)
         DtOff = DelayT;
-      float Dt = 0;
+      float DtRep = DelayTRep;
       long nCiclos = 1;
       if ( (Sp=='c') && (!jaTerminou()) ){
-        Dt = myParseFloat();
+        if (removeEspaco(',')=='*'){
+          removeEspaco( '*' );
+        }else{
+          DtRep = myParseFloat();
+        }
         if (removeEspaco(',')=='*'){
           nCiclos = 1;
           removeEspaco( '*' );
@@ -173,26 +224,27 @@ void loop() {
           }
         }
       }
-      fazOnOffCycles(DtOff, Dt, nCiclos, DtZeroPadrao);
+      if (DtRep==0.){
+        nCiclos = 1;
+      }
+      Serial.println( char(Sp) );
+      fazOnOffCycles(DtOff, DtRep, nCiclos, DtZeroPadrao);
       Serial.println(".");
 
       
 
-    }else if(Sp=='j'){ // j-> jump : j DF, Dt, nJumps
-      removeEspaco(Sp);
+    }else if(Sp=='j'){ // j-> jump : j DF, DtRep, nJumps
+      myRead();
       if (!jaTerminou()){
-        Serial.println( char(Sp) );
         float DF;
-        float Dt = DelayT;
+        float DtRep = DelayTRep;
         long nJumps = 1;
         DF = myParseInt();
         if (!jaTerminou()){
           if (removeEspaco()=='*'){
             removeEspaco('*');
           }else{
-            Dt = myParseFloat();
-            if (Dt==0)
-              Dt = DelayT;
+            DtRep = myParseFloat();
           }
           if (!jaTerminou()){
             nJumps = myParseInt();
@@ -200,98 +252,80 @@ void loop() {
               nJumps = 1;
           }
         }
-        //fazJumps(float DF, float Dt, long nJumps, float DtZero)
-        fazJumps( DF, Dt, nJumps, DtZeroPadrao);
-        Serial.println(".");
+        if (DF!=0.){
+          if (DtRep==0.){
+            nJumps = 1;
+          }
+          Serial.println( char(Sp) );
+          //fazJumps(float DF, float DtRep, long nJumps, float DtZero)
+          fazJumps( DF, DtRep, nJumps, DtZeroPadrao);
+          Serial.println(".");
+        }
       }
       
 
     }else if( (Sp=='s') || (Sp=='S') || (Sp=='u') || (Sp=='d') ){ 
-      // s -> steps: s Fini, Ffin
+      // s -> steps: s Fini, Ffin, Dt
       // S -> steps: s Fini, Ffin, Steps, Dt
-      // u -> up:    u
-      // d -> down:  d
-      removeEspaco(Sp);
-      if ( (Sp=='u') || (Sp=='d') || (!jaTerminou()) ){
-        Serial.println( char(Sp) );
-        float Fini = 0.;
-        float Ffin = 0.;
-        if (Sp=='u'){ // u -> up
+      // u -> up:    u Dt
+      // d -> down:  d Dt
+      myRead();
+      float Fini = 0.;
+      float Ffin = 0.;
+      if (Sp=='u'){ // u -> up : u Dt
+        Fini = faseAtual;
+        Ffin = faseAtual+360.0;          
+      }else if (Sp=='d'){ // d -> down : d Dt
+        Fini = faseAtual;
+        Ffin = faseAtual-360.0;        
+      }else if ( (Sp=='s') || (Sp=='S') ){ // s,S
+          // s -> steps: s Fini, Ffin, Dt
+          // S -> steps: s Fini, Ffin, Steps, Dt
+        if (removeEspaco()=='*'){
           Fini = faseAtual;
-          Ffin = faseAtual+360.0;          
-        }else if (Sp=='d'){ // d -> down
-          Fini = faseAtual;
-          Ffin = faseAtual-360.0;        
-        }else if ( (Sp=='s') || (Sp=='S') ){ // s,S
-           // s -> steps: s Fini, Ffin
-           // S -> steps: s Fini, Ffin, Steps, Dt
-          if (removeEspaco()=='*'){
-            Fini = faseAtual;
-            removeEspaco('*');
-          } else {
-            Fini = myParseFloat();
-          }
-          if (removeEspaco(',')=='*'){
-            removeEspaco('*');
-            Ffin = Fini;
-          }
-          Ffin += myParseFloat();
-        }      
-        long Steps;
-        float Dt = DelayT;
-        if ( (Sp!='S') || (jaTerminou()) ){
-          Steps = (Imax+1)*(abs(Ffin-Fini)/360.0);
+          removeEspaco('*');
+        } else {
+          Fini = myParseFloat();
+        }
+        if (removeEspaco(',')=='*'){
+          removeEspaco('*');
+          Ffin = Fini;
+        }
+        Ffin += myParseFloat();
+      }      
+      long Steps= (Imax+1)*(abs(Ffin-Fini)/360.0);
+      if ( (Sp=='S') && (!jaTerminou()) ){
+        if (removeEspaco(',')=='#'){
+            removeEspaco('#');
+            Steps = 2*(Imax+1)*(abs(Ffin-Fini)/360.0);
+        }else if (removeEspaco(',')=='$'){
+            removeEspaco('$');
+            Steps = (Imax+1)*(abs(Ffin-Fini)/360.0);
         }else{
-          if (removeEspaco(',')=='#'){
-              removeEspaco('#');
-              Steps = 2*(Imax+1)*(abs(Ffin-Fini)/360.0);
-          }else if (removeEspaco(',')=='$'){
-              removeEspaco('$');
-              Steps = (Imax+1)*(abs(Ffin-Fini)/360.0);
-          }else{
-            Steps = myParseInt();
-          }
-          if (removeEspaco(',')=='*'){
-            removeEspaco('*');
-          }else{
-            if (!jaTerminou()){
-              Dt = myParseFloat();
-              if (Dt==0.)
-                Dt = DelayT;
-            }
-          }
-        }
-        if ( (Steps>0) && (Dt>0.) ){
-          //fazSteps(float Fini, float Ffin, long Steps, float Dt, float DtZero)
-          fazSteps(Fini, Ffin, Steps, Dt, DtZeroPadrao);
-          Serial.println(".");
+          Steps = myParseInt();
         }
       }
-  
-
-    }else if (Sp=='i'){
-      removeEspaco(Sp);
-      bool mudouImax = false;
-      int newImax = 0;
-      if (jaTerminou()){
-        removeEspaco(';');
-      }else{
-        newImax = myParseInt();
-        if ( (newImax>=ImaxMINgeral) && (newImax<=ImaxMAXgeral) ){
-          mudouImax = true;
+      float Dt = DelayT;
+      if (!jaTerminou()){
+        if (removeEspaco(',')=='*'){
+          removeEspaco('*');
+        }else{
+          Dt = myParseFloat();
+          Serial.println( Dt );
+          if (Dt==0.)
+            Dt = DelayT;
         }
       }
-      if ( mudouImax ){
-        mudaImax( newImax, faseAtual );
-        Serial.print( Imax );
-        Serial.print( " (" );
-        Serial.print( 8000.0/(Imax+1) );
-        Serial.println( "kHz)" );
+      if ( (Steps>0) && (Dt>0.) ){
+        Serial.println( char(Sp) );
+        //fazSteps(float Fini, float Ffin, long Steps, float Dt, float DtZero)
+        fazSteps(Fini, Ffin, Steps, Dt, DtZeroPadrao);
+        Serial.println(".");
       }
 
 
     }else if(Sp=='h'){
-      removeEspaco(Sp);
+      myRead();
       int Nivel=0;
       if (jaTerminou())
         removeEspaco(';');
@@ -301,7 +335,7 @@ void loop() {
 
 
     }else if(Sp=='a'){
-      removeEspaco(Sp);
+      myRead();
       byte qualControle=100;
       bool newValue;
       bool newModo;
@@ -360,8 +394,9 @@ void loop() {
 
 
     }else{ // Se nao for nenhum comando conhecido
+      Serial.print( F("skipped: ") );
       Serial.println( char(Sp) );
-      removeEspaco(Sp);
+      myRead();
     }
   }
 
@@ -370,20 +405,85 @@ void loop() {
 
 
 
+void addChar(){
+  char inChar = char( Serial.read() );
+  if ( (inChar==10) || (inChar==13) ){
+    inChar = endChar;
+  }
+  if (inChar>0){
+    if (inChar==endChar){
+      if ( (inStr.length()>0) && (!inStr.endsWith(endStr)) ){
+        inStr += inChar;
+      }
+    }else{
+      inStr += inChar;
+    }
+  }
+}
 
 int myRead(){
-  return Serial.read();
-}
-int myPeek(){
-  return Serial.peek();
-}
-long myParseInt(){
-  return Serial.parseInt();
-}
-float myParseFloat(){
-  return Serial.parseFloat();
+  int answer = -1;
+  if (inStr.length()>0){
+    answer = inStr.charAt(0);
+    inStr.remove(0,1);
+  }
+  return answer;
 }
 
+int myPeek(){
+  int answer = -1;
+  if (inStr.length()>0){
+    answer = inStr.charAt(0);
+  }
+  return answer;
+}
+
+long myParseInt(){
+  return (digitosStr()).toInt();
+}
+
+float myParseFloat(){
+  return (digitosStr()).toFloat();
+}
+
+String digitosStr(){
+  bool lastOk = true;
+  int nDigOk = -1;
+  int nDig;
+  bool passouSeparador = false;
+  for (nDig=0; 
+      (nDig<inStr.length())&&(lastOk); nDig++){
+    char char_At = inStr.charAt(nDig);
+    lastOk = false;
+    if ( (char_At>='0')&&(char_At<='9') ){
+      lastOk = true;
+      if (nDigOk<0)
+        nDigOk = 0;
+      nDigOk++;
+    }else if ((!passouSeparador)&&(char_At=='.')){
+      passouSeparador = true;
+      lastOk = true;
+      if (nDigOk<0)
+        nDigOk = 0;
+      nDigOk++;
+    }else if (nDigOk<0){
+      if (char_At==' '){
+        lastOk = true;
+      }else if( (char_At=='+')||(char_At=='-') ){
+        lastOk = true;
+        nDigOk = 0;        
+      }
+    }
+  }
+  if (nDigOk<=0){
+    return String("");
+  }else{
+    nDig = nDig-1;
+    String answer = (inStr.substring(0,nDig));
+    inStr.remove(0,nDig);
+    return answer;
+  }
+}
 
 
 
@@ -414,13 +514,13 @@ byte removeEspaco(byte oqueMais1, byte oqueMais2){
 
 
 bool jaTerminou(){
-  byte endChar[] = { ';','w','t','p','f',   'o','c','j','?','h',   
+  byte terminouChar[] = { ';','w','t','p','f',   'o','c','j','?','h',   
                      'i','s','S','u','d',   'a', 10, 13 };
-  int nEndChar = sizeof(endChar)/sizeof(endChar[0]);
+  int nTerminouChar = sizeof(terminouChar)/sizeof(terminouChar[0]);
   byte pChar = removeEspaco(',');
   bool achou = false;
-  for ( int nAtu=0; (!achou)&&(nAtu<nEndChar); nAtu++ ){
-    achou = (pChar==endChar[nAtu]);
+  for ( int nAtu=0; (!achou)&&(nAtu<nTerminouChar); nAtu++ ){
+    achou = (pChar==terminouChar[nAtu]);
   }
   return achou;
 }
