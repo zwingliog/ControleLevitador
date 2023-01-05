@@ -5,6 +5,8 @@
 //                 [10 = not 9 ] e [3 = not 11]
 //                 para nao precisar de inversor externo
 
+// v1.0.2 de 05/01/2023 (pequenas correcoes)
+// v1.0.1 de 03/01/2023 (controle dos pinos usa 'A' ao inves de 'a')
 // v1.0.0 de 03/01/2023 (adicionado funcao '_' para variaveis globais)
 // versao de 01/01/2023 (usando Strings)
 // versao de 31/12/2022 (ajuste comandos para diferenciar maiusculas e minusculas)
@@ -28,8 +30,8 @@ float faseAtual = 0.0;
 float faseAtualReal = 0.0;
 int potAtual = 1;
 bool oldFF = false;
-float DelayT = 10.0;
-float DelayTRep = 1000.0;
+float DelayT = 10.0; // 10ms
+float DelayTRep = 1000.0; // 1s (1000ms)
 
 bool ESCREVE = true;
 bool DEBUG = false;
@@ -48,8 +50,9 @@ bool strOk = false;
 char endChar = 13;
 String endStr = String(endChar);
 
-String memos[] = {"a0H;w10;a0L;", "u;d;", "d;u;", 
-                  "R(2){M2}", "", "", "", "", ""};
+String memos[] = {"A0H;w10;A0L;", "u;d;", "d;u;", 
+                  "R(2){M2}", "w300;p0;w700;", "M1 M5 M1 p1", 
+                  "_DEBUG_true", "_ESCREVE_false", "" };
 const int  nMemos = sizeof(memos)/sizeof(memos[0]);
 
 // ------------- SETUP ---------------- SETUP -------------------
@@ -67,7 +70,7 @@ void setup() {
     digitalWrite( pinControle[qControle], valorControle[qControle] );
   }  
   Serial.println( F("Levitacao 2 Timers") );
-  Serial.println( F("v1.0.0") );
+  Serial.println( F("v1.0.1") );
   Serial.print( F("usando TIPOTimer = ") );
   Serial.println( TIPOTimer );
   Serial.println( F("digite h para help") );
@@ -99,13 +102,16 @@ void loop() {
       removeEspaco(Sp);
 
     }else if( (Sp=='w') || (Sp=='W') ){ // w,W - wait
-      // w -> wait : w [Dt]
-      // W -> wait Rep : W [DtRep]
+      // w -> wait short (ms) : w [Dt]
+      // W -> Wait long (s) : W [DtRep]
       unsigned long t0 = micros();
       myRead();
       float newDelay = 0.;
       if (!jaTerminou()){
         newDelay = myParseFloat();
+        if (Sp=='W'){
+          newDelay = 1000.0*newDelay;
+        }
       }
       if (newDelay==0.){
         if (Sp=='w'){
@@ -119,6 +125,11 @@ void loop() {
         while( micros()<Limite ){}
         if (ESCREVE)
           Serial.println( char(Sp) );
+        if (DEBUG){
+          Serial.print( F("Wait for ") );
+          Serial.print( newDelay );
+          Serial.println( F(" ms" ) );
+        }
       }
 
     }else if( (Sp=='t') || (Sp=='T') ){ // t, T -> set DelayT
@@ -131,7 +142,7 @@ void loop() {
           if (Sp=='t'){
             DelayT = newDelayT;
           }else if (Sp=='T'){
-            DelayTRep = newDelayT;
+            DelayTRep = 1000.0*newDelayT;
           }
           if (ESCREVE)
             mostraDelayT();
@@ -148,7 +159,10 @@ void loop() {
 
     }else if(Sp=='p'){
       myRead();
-      if (!jaTerminou()){
+      if (myPeek()=='?'){
+        mostraPot();
+        myRead();
+      }else if (!jaTerminou()){
         int newP = myParseInt();
         if ( (newP>=0)&&(newP<=3) ){
           mudaPot( newP );
@@ -157,15 +171,15 @@ void loop() {
             Serial.println( newP );
           }
         }
-      }else{
-        if (ESCREVE)
-          mostraPot();
       }
 
 
     }else if(Sp=='f'){
       myRead();
-      if (!jaTerminou()){
+      if (myPeek()=='?'){
+        mostraFase();
+        myRead();
+      }else if (!jaTerminou()){
         float newF = 0.;
         if ( removeEspaco()=='*' ){
           removeEspaco('*');
@@ -173,29 +187,26 @@ void loop() {
         }
         newF += myParseFloat();
         mudaFase( newF, true );
-      }else{
-        if (ESCREVE)
-          mostraFase();
       }
   
 
     }else if (Sp=='i'){
       myRead();
-      bool mudouImax = false;
-      int newImax = 0;
-      if (jaTerminou()){
-        removeEspaco(';');
-      }else{
-        newImax = myParseInt();
+      if (myPeek()=='?'){
+        mostraPot();
+        myRead();
+      }else if (!jaTerminou()){
+        bool mudouImax = false;
+        int newImax = myParseInt();
         if ( (newImax>=ImaxMINgeral) && (newImax<=ImaxMAXgeral) ){
           mudouImax = true;
         }
+        if ( mudouImax ){
+          mudaImax( newImax, faseAtual );
+        }
+        if (ESCREVE)
+          mostraImax();
       }
-      if ( mudouImax ){
-        mudaImax( newImax, faseAtual );
-      }
-      if (ESCREVE)
-        mostraImax();
 
 
 
@@ -353,25 +364,20 @@ void loop() {
       mostraHelpComandos( Nivel!=0 );  
 
 
-    }else if(Sp=='a'){
+    }else if(Sp=='A'){
       myRead();
-      byte qualControle=100;
-      bool newValue;
-      bool newModo;
-      bool mudouValue = false;
-      bool mudouModo = false;
-      if (!jaTerminou()){
+      if (myPeek()=='?'){
+        mostraControles();
+        myRead();
+      }else if (!jaTerminou()){
+        byte qualControle=100;
+        bool newValue;
+        bool newModo;
+        bool mudouValue = false;
+        bool mudouModo = false;
         int newQual = myParseInt();
         if (ehControleValido(newQual<nControles))
           qualControle = newQual;
-      }
-      if (jaTerminou()){
-        removeEspaco(';');
-        if (ehControleValido(qualControle)){
-          newValue = !valorControle[qualControle];
-          mudouValue = true;
-        }
-      }else{
         Sp = removeEspaco();
         if (Sp=='L'){
           newValue = LOW;
@@ -390,18 +396,18 @@ void loop() {
           mudouValue = true;
         }
         removeEspaco(Sp,';');
-      }
-      if ( ehControleValido(qualControle) && ( (mudouValue) || (mudouModo) ) ){
-        if (mudouModo){
-          modoControle[qualControle] = newModo;
-          pinMode( pinControle[qualControle], modoControle[qualControle] );
+        if ( ehControleValido(qualControle) && ( (mudouValue) || (mudouModo) ) ){
+          if (mudouModo){
+            modoControle[qualControle] = newModo;
+            pinMode( pinControle[qualControle], modoControle[qualControle] );
+          }
+          if (mudouValue){
+            valorControle[qualControle] = newValue;
+            digitalWrite( pinControle[qualControle], valorControle[qualControle] );
+          }
+          if (ESCREVE)
+            mostraControles( qualControle );
         }
-        if (mudouValue){
-          valorControle[qualControle] = newValue;
-          digitalWrite( pinControle[qualControle], valorControle[qualControle] );
-        }
-        if (ESCREVE)
-          mostraControles( qualControle );
       }
 
 
@@ -409,28 +415,36 @@ void loop() {
 
     }else if (Sp=='M'){
       myRead();
-      int numMemo = myParseInt();
-      if ((numMemo>=1) && (numMemo<=nMemos)){
-        inStr = memos[numMemo-1] + inStr;
-      }
-
+      if (myPeek()=='?'){
+        mostraMemos();
+        myRead();
+      }else{
+        int numMemo = myParseInt();
+        if ((numMemo>=1) && (numMemo<=nMemos)){
+          inStr = memos[numMemo-1] + inStr;
+        }
+      }  
 
 
 
     }else if (Sp=='>'){
       myRead();
-      int numMemo = myParseInt();
-      if ((numMemo>=1) && (numMemo<=nMemos) && (inStr.charAt(0)==':') ){
+      if (myPeek()=='?'){
+        mostraMemos();
         myRead();
-        int nextEnd = inStr.indexOf(endChar);
-        if (nextEnd>=0){
-          memos[numMemo-1] = inStr.substring(0,nextEnd);
-          inStr.remove(0,nextEnd+1);
-          if (ESCREVE)
-            mostraMemos(numMemo);
+      }else{
+        int numMemo = myParseInt();
+        if ((numMemo>=1) && (numMemo<=nMemos) && (inStr.charAt(0)==':') ){
+          myRead();
+          int nextEnd = inStr.indexOf(endChar);
+          if (nextEnd>=0){
+            memos[numMemo-1] = inStr.substring(0,nextEnd);
+            inStr.remove(0,nextEnd+1);
+            if (ESCREVE)
+              mostraMemos(numMemo);
+          }
         }
       }
-
 
 
 
@@ -616,8 +630,8 @@ byte removeEspaco(byte oqueMais1, byte oqueMais2){
 
 bool jaTerminou(){
   byte terminouChar[] = { ';','w','t','p','f',   'o','c','j','?','h',   
-                          'i','s','S','u','d',   'a','W','T', 10, 13,
-                          'M','>','R' };
+                          'i','s','S','u','d',   'W','T', 10, 13,
+                          'A','M','>','R' };
   int nTerminouChar = sizeof(terminouChar)/sizeof(terminouChar[0]);
   byte pChar = removeEspaco(',');
   bool achou = false;

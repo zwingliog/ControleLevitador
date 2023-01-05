@@ -13,7 +13,7 @@
 // Contem as seguintes funcoes:
 // configuraTimer12()
 // mudaImax12( int newImax, float oldFase )
-// mudaFase12( float newFase, bool escreve )
+// mudaFase12( float newFase, bool mostra )
 
 void configuraTimer12(){
   // Timer 1 usa os pinos 9 e 10 (OC1A=9, OC1B=10)
@@ -64,7 +64,7 @@ void mudaImax12( int newImax, float oldFase ){
 }
 
 
-void mudaFase12( float newFase, bool escreve ){
+void mudaFase12( float newFase, bool mostra ){
   //update ocr registers with the value
   int Ip = Imax + 1;
   int Ip2 = 2 * Ip;
@@ -106,7 +106,7 @@ void mudaFase12( float newFase, bool escreve ){
   GTCCR = 0;
   interrupts();
   
-  if (escreve){
+  if ( (ESCREVE) && (mostra) ){
     Serial.print( F("f=") );
     Serial.print( newFase );
     Serial.print( F(" fR=") );

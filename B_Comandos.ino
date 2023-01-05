@@ -19,13 +19,14 @@ void fazOnOffCycles(float DtOff, float DtRep, long nCiclos, float DtZero){
     Serial.println( ")" );
   }
   unsigned long t0 = micros();
+  int potOnAtu = potAtual;
   for (long i=0; i<nCiclos; i++){
     unsigned long Limite1 = t0 + (i*DtRep + DtZero)*1000uL;
     unsigned long Limite2 = t0 + (i*DtRep + DtOff + DtZero)*1000uL;
     while (micros()<Limite1){}
     mudaPot( 0 );
     while (micros()<Limite2){}
-    mudaPot( 1 );
+    mudaPot( potOnAtu );
   }
 }
 
@@ -158,7 +159,7 @@ void mostraControles(int QUAL){
 }
 void mostraControles(int QUAL, bool TERMINA){
   if (ehControleValido(QUAL)){
-    Serial.print( F("a") );
+    Serial.print( F("A") );
     Serial.print( QUAL );
     Serial.print( F(":") );
     Serial.print( (valorControle[QUAL]==LOW)? "L": "H" );
@@ -190,10 +191,12 @@ void mostraHelpComandos(){
 void mostraHelpComandos(bool DETALHADO){
   Serial.println( F("List of valid commands:") );
   Serial.println( F("? > status [ ? ]") );
-  Serial.println( F("wW> wait [ w DelayT ] *W->DelayTRep") );
-  Serial.println( F("tT > set DelayT [ t newDelayT ]  *T->newDelayTRep") );
-  Serial.println( F("p > set Pot [ p newP ]") );
-  Serial.println( F("f > set Phase [ f newF ]") );
+  Serial.println( F("w > wait (short) [ w DelayT ] (ms)") );
+  Serial.println( F("W > wait (long) [ W DelayTRep ] (s)") );
+  Serial.println( F("t > set DelayT [ t newDelayT ]  (ms)") );
+  Serial.println( F("T > set DelayTRep [ t newDelayTRep ] (s)") );
+  Serial.println( F("p > set Pot [ p newP ] *p?->mostra Pot") );
+  Serial.println( F("f > set Phase [ f newF ] *f?->mostra Phase") );
   Serial.println( F("o > off [ o DtOff ]") );
   Serial.println( F("c > on-off cycles [ c DtOff, DtRep, nCycles ]") );
   Serial.println( F("j > jump [ j DeltaF, DtRep, nJumps ]") );
@@ -202,15 +205,17 @@ void mostraHelpComandos(bool DETALHADO){
   Serial.println( F("s > switch (in steps) [ s Fini, Ffin, Dt ]") );
   Serial.println( F("S > switch (in steps) [ S Fini, Ffin, Steps, Dt ]") );
   if (DETALHADO){
-    Serial.println( F("i > define Imax [ i Imax ]") );
-    Serial.println( F("a > set port A0 to A5 [ a 0-5, H_L_I_O ]") );
-    Serial.println( F("M > recover from Memory [ M 1-4 ]" ) );
-    Serial.println( F("> > save to Memory [ > 1-4: @ ]") );
+    Serial.println( F("i > define Imax [ i Imax ]  *i?->mostra IMax") );
+    Serial.println( F("A > set port A0 to A5 [ A 0-5, H_L_I_O ] *A?->mostra") );
+    Serial.println( F("M > recover from Memory [ M 1-9 ] *M?->mostra Memos" ) );
+    Serial.println( F("> > save to Memory [ > 1-9: @ ] *>?->mostra Memos") );
     Serial.println( F("R > Repeat [ R(#){@} ]") );
+    Serial.println( F("_ > set global variable [_@_VALOR] ...") );
+    Serial.println( F("    where @=(DEBUG, ESCREVE, DtZeroPadrao)") ); 
   }
   Serial.println( F("h > help [ h ]=simple help,  [h1]=full help") );
   if (DETALHADO){
-    Serial.println( F(" OBS1: in 'S': Steps may be '#' ou '$':") );
+    Serial.println( F(" OBS1: in 'S': Steps may be '!' ou '$':") );
     Serial.println( F("              '!'->2*(iMax+1) e '$'->(iMax+1) per 360 degrees") );
     Serial.println( F(" OBS2: in 's','S','f': '*'=current phase") );
     Serial.println( F("                       '*'+DF=current phase+DF") );

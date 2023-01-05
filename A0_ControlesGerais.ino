@@ -10,12 +10,12 @@
 void mudaFase( float newFase ){
   mudaFase( newFase, false );
 }
-void mudaFase( float newFase, bool escreve ){
+void mudaFase( float newFase, bool mostra ){
   if (TIPOTimer==12){
-    mudaFase12( newFase, escreve );
+    mudaFase12( newFase, mostra );
   }
   else if (TIPOTimer==1){
-    mudaFase1( newFase, escreve );
+    mudaFase1( newFase, mostra );
   }
 }
 

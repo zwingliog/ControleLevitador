@@ -13,7 +13,7 @@
 // Contem as seguintes funcoes:
 // configuraTimer1()
 // mudaImax1( int newImax, float oldFase )
-// mudaFase1( float newFase, bool escreve )
+// mudaFase1( float newFase, bool mostra )
 
 void configuraTimer1(){
   // Timer 1 usa os pinos 9 e 10
@@ -45,7 +45,7 @@ void mudaImax1( int newImax, float oldFase ){
 
 
 
-void mudaFase1( float newFase, bool escreve ){
+void mudaFase1( float newFase, bool mostra ){
     //update ocr registers with the value
     int Ip = Imax + 1;
     int Ip2 = 2 * Ip;
@@ -127,7 +127,7 @@ void mudaFase1( float newFase, bool escreve ){
       newFF = !newFF;
     }
     oldFF = newFF;
-    if (escreve){
+    if ((ESCREVE)&&(mostra)){
       Serial.print( F("f=") );
       Serial.print( newFase );
       Serial.print( F(" fR=") );
