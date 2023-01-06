@@ -7,7 +7,7 @@
 
 void fazOnOffCycles(float DtOff, float DtRep, long nCiclos, float DtZero){
   if (DEBUG){
-    Serial.println( F("fazOnOffCycles(float DtOff, float DtRep, long nCiclos, float DtZero)") );
+    Serial.println( F("fazOnOffCycles(DtOff, DtRep, nCiclos, DtZero)") );
     Serial.print( F("fazOnOffCycles(") );
     Serial.print( DtOff );
     Serial.print( ", " );
@@ -35,7 +35,7 @@ void fazOnOffCycles(float DtOff, float DtRep, long nCiclos, float DtZero){
 
 void fazJumps(float DF, float DtRep, long nJumps, float DtZero){
   if (DEBUG){
-    Serial.println( F("fazJumps(float DF, float DtRep, long nJumps, float DtZero)") );
+    Serial.println( F("fazJumps(DF, DtRep, nJumps, DtZero)") );
     Serial.print( F("fazJumps(") );
     Serial.print( DF );
     Serial.print( ", " );
@@ -65,13 +65,11 @@ void fazJumps(float DF, float DtRep, long nJumps, float DtZero){
 
 
 
-void fazSteps(float Fini, float Ffin, long Steps, float Dt, float DtZero){
+void fazSteps(float DF, long Steps, float Dt, float DtZero){
   if (DEBUG){
-    Serial.println( F("fazSteps(float Fini, float Ffin, long Steps, float Dt, float DtZero)") );
+    Serial.println( F("fazSteps(DF, Steps, Dt, DtZero)") );
     Serial.print( F("fazSteps(") );
-    Serial.print( Fini );
-    Serial.print( ", " );
-    Serial.print( Ffin );
+    Serial.print( DF );
     Serial.print( ", " );
     Serial.print( Steps );
     Serial.print( ", " );
@@ -81,6 +79,8 @@ void fazSteps(float Fini, float Ffin, long Steps, float Dt, float DtZero){
     Serial.println( ")" );
   }
   unsigned long t0 = micros();
+  float Fini = faseAtual;
+  float Ffin = Fini + DF;
   for (long i=0; i<=Steps; i++){
     unsigned long Limite = t0 + (i*Dt + DtZero)*1000uL;
     float Fatu = Fini + float(i*(Ffin-Fini))/max(Steps,1);
@@ -202,8 +202,8 @@ void mostraHelpComandos(bool DETALHADO){
   Serial.println( F("j > jump [ j DeltaF, DtRep, nJumps ]") );
   Serial.println( F("u > up (360 degrees) [ u Dt ]") );
   Serial.println( F("d > down (360 degrees) [ d Dt ]") );
-  Serial.println( F("s > switch (in steps) [ s Fini, Ffin, Dt ]") );
-  Serial.println( F("S > switch (in steps) [ S Fini, Ffin, Steps, Dt ]") );
+  Serial.println( F("s > switch (in steps) [ s DF, Dt ]") );
+  Serial.println( F("S > switch (in steps) [ S DF, Steps, Dt ]") );
   if (DETALHADO){
     Serial.println( F("i > define Imax [ i Imax ]  *i?->mostra IMax") );
     Serial.println( F("A > set port A0 to A5 [ A 0-5, H_L_I_O ] *A?->mostra") );
