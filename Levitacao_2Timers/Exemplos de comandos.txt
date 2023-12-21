@@ -1,0 +1,5 @@
+>1:A0H,w10,A0L
+>2:M1,w300,o10,w700,M1,
+>3:R(24){M2,W1,f15,W5},M2
+
+OBS: exemplo usando colchetes removido para evitar problemas com a nova versão do levitador
