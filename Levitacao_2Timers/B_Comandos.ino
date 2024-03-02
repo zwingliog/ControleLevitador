@@ -254,7 +254,7 @@ void mostraHelpComandos(bool DETALHADO){
   Serial.println( F("h > help [ h ]=simple help,  [h1]=full help") );
   if (DETALHADO){
     Serial.println( F(" OBS1: in 'S': Steps may be '!' ou '$':") );
-    Serial.println( F("              '!'->2*(iMax+1) e '$'->(iMax+1) per 360 degrees") );
+    Serial.println( F("              '!'->2*(iMax+1) e '$'->(iMax+1)/2 per 360 degrees") );
     Serial.println( F(" OBS2: in 'f': '*'+DF=current phase+DF") );
   }
 }

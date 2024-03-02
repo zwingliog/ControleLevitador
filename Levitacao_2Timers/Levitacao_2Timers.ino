@@ -5,6 +5,9 @@
 //                 [10 = not 9 ] e [3 = not 11]
 //                 para nao precisar de inversor externo
 
+#define TIPOTimer 1
+#define VERSAO "v1.0.8.1"
+// v1.0.8.1 de 02/03/2024 (mudança inicialização pinControle->Input)
 // v1.0.8 de 24/12/2023 (mudanca na forma de entrada do texto)
 // v1.0.7 de 20/12/2023 (correcao dos tempos dos comandos)
 // v1.0.6 de 19/12/2023 (correcao do tempo do comando "o")
@@ -24,7 +27,6 @@
 //   OBS: nome anterior: "Levitacao_ControleLevitador"
 
 #define TIME_OUT  5
-byte TIPOTimer = 1;
 int Imax = 199; // calculo preve 199 para 40kHz e 319 para 25kHz
 int fatorImax = 1; // fator multiplicativo do Imax para Timer2 (8-bits)
 int ImaxMIN = 99;
@@ -68,7 +70,8 @@ byte pinEnA = 5;
 byte pinEnB = 6;
 byte pinControle[] = {A0, A1, A2, A3, A4, A5};
 bool valorControle[] = {LOW, LOW, LOW, LOW, LOW, LOW};
-bool modoControle[] = {OUTPUT, OUTPUT, OUTPUT, OUTPUT, OUTPUT, OUTPUT};
+bool modoControle[] = {INPUT, INPUT, INPUT, INPUT, INPUT, INPUT};
+bool primeiroUsoControle[] = {true, true, true, true, true, true};
 const int nControles = sizeof(pinControle)/sizeof(pinControle[0]);
 
 
@@ -105,7 +108,7 @@ void setup() {
     digitalWrite( pinControle[qControle], valorControle[qControle] );
   }  
   Serial.println( F("Levitacao 2 Timers") );
-  Serial.println( F("v1.0.8") );
+  Serial.println( VERSAO );
   Serial.print( F("usando TIPOTimer = ") );
   Serial.println( TIPOTimer );
   Serial.println( F("digite h para help") );
@@ -221,9 +224,9 @@ void loop() {
         tLAST = micros();
       }
       if (strModo!=' '){
-        if (strModo=='*'){
+        if (strModo=='#'){
           strModo = 
-            (modoControle[qualControle]==false)? 'O':'I';
+            (modoControle[qualControle]==INPUT)? 'O':'I';
         }
         modoControle[qualControle] = 
                     (strModo=='I')? INPUT: OUTPUT;
@@ -231,6 +234,10 @@ void loop() {
                  modoControle[qualControle] );
       }
       if (strValue!=' '){
+        if (strValue=='*'){
+          strValue = 
+            (valorControle[qualControle]==LOW)? 'H':'L';
+        }
         valorControle[qualControle] = 
                      (strValue=='L')? LOW : HIGH;
         digitalWrite( pinControle[qualControle], 
@@ -489,7 +496,7 @@ void loop() {
             Steps = 2*(Imax+1)*(abs(DF)/360.0);
         }else if (removeEspaco(',')=='$'){
             removeEspaco('$');
-            Steps = (Imax+1)*(abs(DF)/360.0);
+            Steps = ((Imax+1)*(abs(DF)/360.0))/2;
         }else{
           Steps = myParseInt();
         }
@@ -553,10 +560,18 @@ void loop() {
           strValue = 'H';
           mudouModo = true;
           mudouValue = true;
-        }else if (Sp=='*'){
+        }else if (Sp=='*'){ //para trocar estado (LOW->HIGH, H->L)
           strValue = '*';
           mudouValue = true;
+        }else if (Sp=='#'){ //para trocar tipo (INPUT->OUTPUT, O->I)
+          strModo = '#';
+          mudouModo = true;
         }
+        if ((mudouValue)&&(!mudouModo)){
+          mudouModo = primeiroUsoControle[newQual];
+          if (mudouModo){ strModo = 'O'; }
+        }
+        primeiroUsoControle[newQual] = false;
         removeEspaco(Sp,';');
         if ( ehControleValido(qualControle) && 
            ( (mudouValue) || (mudouModo) ) ){
