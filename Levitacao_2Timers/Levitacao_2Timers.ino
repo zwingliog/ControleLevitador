@@ -6,8 +6,9 @@
 //                 para nao precisar de inversor externo
 
 #define TIPOTimer 1
-#define VERSAO "v1.0.8.1"
-// v1.0.8.1 de 02/03/2024 (mudança inicialização pinControle->Input)
+#define VERSAO "v1.0.9"
+// v1.0.9 de 02/03/2024 (tNEXT->dtNEXT, p/ evitar overflow do micros)
+// v1.0.8.1 de 02/03/2024 (mudanca inicializacao do pinControle->Input)
 // v1.0.8 de 24/12/2023 (mudanca na forma de entrada do texto)
 // v1.0.7 de 20/12/2023 (correcao dos tempos dos comandos)
 // v1.0.6 de 19/12/2023 (correcao do tempo do comando "o")
@@ -42,7 +43,7 @@ float DelayT = 10.0; // 10ms
 float DelayTRep = 1000.0; // 1s (1000ms)
 
 unsigned long tLAST = 0;
-unsigned long tNEXT = 0;
+unsigned long dtNEXT = 0;
 
 #define nCOMANDOsMax 20
 int nCOMANDOs = 0;
@@ -141,51 +142,47 @@ void loop() {
     bool emLoop = false;
     
     if (newCOMANDO=='w'){
-      if (tNEXT){
-        tLAST = tNEXT;
-        while( micros()<tNEXT ){}
-      }
-      tNEXT = tLAST + int1COMANDOs[COMANDOsAtu];
+      dtNEXT = dtNEXT + int1COMANDOs[COMANDOsAtu];
       
     }else if (newCOMANDO=='I'){
         mostraImax();
     }else if (newCOMANDO=='i'){
       // addCOMANDOs( 'i', newImax );
-      if (tNEXT){
-        tLAST = tNEXT;
-        while( micros()<tNEXT ){}
+      if (dtNEXT){
+        while( (micros()-tLAST)<dtNEXT ){}
+        tLAST += dtNEXT;
       }else{
         tLAST = micros();
       }          
       mudaImax( int1COMANDOs[COMANDOsAtu], faseAtual );
-      tNEXT = 0;
+      dtNEXT = 0;
 
     }else if (newCOMANDO=='P'){
         mostraPot();
     }else if (newCOMANDO=='p'){
       // addCOMANDOs( 'p', newP );
-      if (tNEXT){
-        tLAST = tNEXT;
-        while( micros()<tNEXT ){}
+      if (dtNEXT){
+        while( (micros()-tLAST)<dtNEXT ){}
+        tLAST += dtNEXT;
       }else{
         tLAST = micros();
       }
       mudaPot( int1COMANDOs[COMANDOsAtu] );
-      tNEXT = 0;
+      dtNEXT = 0;
     
     }else if (newCOMANDO=='F'){
         mostraFase();
     }else if (newCOMANDO=='f'){
-      if (tNEXT){
-        tLAST = tNEXT;
-        while( micros()<tNEXT ){}
+      if (dtNEXT){
+        while( (micros()-tLAST)<dtNEXT ){}
+        tLAST += dtNEXT;
       }else{
         tLAST = micros();
       }
       float newF = (int1COMANDOs[COMANDOsAtu]==1)? faseAtual:0.;
       newF += float1COMANDOs[COMANDOsAtu];
       mudaFase( newF, true );
-      tNEXT = 0;
+      dtNEXT = 0;
       
     }else if (newCOMANDO=='o'){
       // addCOMANDOs( 'o' DtOff_uL );
@@ -217,9 +214,9 @@ void loop() {
       char strModo = str1COMANDOs[COMANDOsAtu];
       char strValue = str2COMANDOs[COMANDOsAtu];
       int qualControle = int1COMANDOs[COMANDOsAtu];
-      if (tNEXT){
-        tLAST = tNEXT;
-        while( micros()<tNEXT ){}
+      if (dtNEXT){
+        while( (micros()-tLAST)<dtNEXT ){}
+        tLAST += dtNEXT;
       }else{
         tLAST = micros();
       }
@@ -243,7 +240,7 @@ void loop() {
         digitalWrite( pinControle[qualControle], 
                valorControle[qualControle] );
       }
-      tNEXT = 0;
+      dtNEXT = 0;
       if (ESCREVE){ mostraControles( qualControle ); }
 
     }else if (newCOMANDO=='L'){
@@ -263,15 +260,15 @@ void loop() {
         COMANDOsAtu += 1;
       }
     }else{
-      COMANDOsAtu=-1;
+      COMANDOsAtu = -1;
       apagaCOMANDOs();
       if (ESCREVE){ Serial.println('.'); }
     }
   }
-  if (tNEXT){
-    if (micros()>tNEXT){
-      tLAST = tNEXT;
-      tNEXT = 0;
+  if (dtNEXT){
+    if ((micros()-tLAST)>dtNEXT){
+      tLAST = 0;
+      dtNEXT = 0;
     }
   }
   if ( strOk ){
@@ -729,8 +726,8 @@ void loop() {
       }
       Serial.println("");
     }
-    if (tNEXT==0){
-      tLAST = max( tLAST, micros() );
+    if (dtNEXT==0){
+      tLAST = micros();
     }
   }
 

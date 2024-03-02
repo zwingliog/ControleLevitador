@@ -14,19 +14,23 @@ void fazOff(unsigned long DtOff_uL){
     Serial.println( ")" );
   }
   int potOnAtu = potAtual;
-  unsigned long Limite1 = max( tNEXT, micros()+DtZero_uL );
-  unsigned long Limite2 = Limite1 + DtOff_uL;
-  while (micros()<Limite1){}
+  unsigned long dLimite1 = dtNEXT;
+  if ((micros()-tLAST)>dtNEXT){
+    tLAST = micros();
+    dLimite1 = DtZero_uL;
+  }
+  unsigned long dLimite2 = dLimite1 + DtOff_uL;
+  while ( (micros()-tLAST)<dLimite1 ){}
   mudaPot( 0 );
-  while (micros()<Limite2){}
+  while ( (micros()-tLAST)<dLimite2 ){}
   mudaPot( potOnAtu );
   if (DEBUG){
-    Serial.print( Limite1 );
+    Serial.print( tLAST + dLimite1 );
     Serial.print( " a " );
-    Serial.println( Limite2 );
+    Serial.println( tLAST + dLimite2 );
   }
-  tLAST = Limite2;
-  tNEXT = 0;
+  tLAST += dLimite2;
+  dtNEXT = 0;
 }
 
 //void fazOnOffCycles(float DtOff, float DtRep, long nCiclos){
@@ -43,25 +47,29 @@ void fazOnOffCycles(unsigned long DtOff_uL,
     Serial.println( ")" );
   }
   int potOnAtu = potAtual;
-  unsigned long Limite1 = max( tNEXT, micros()+DtZero_uL );
-  unsigned long Limite2 = 0;
+  unsigned long dLimite1 = dtNEXT;
+  if ((micros()-tLAST)>dtNEXT){
+    tLAST = micros();
+    dLimite1 = DtZero_uL;
+  }
+  unsigned long dLimite2 = 0;
   for (unsigned long i=0; i<nCiclos; i++){
     if (i>0){
-      Limite1 += DtRep_uL;
+      dLimite1 = DtRep_uL;
     }
-    Limite2 = Limite1 + DtOff_uL;
-    while (micros()<Limite1){}
+    dLimite2 = dLimite1 + DtOff_uL;
+    while ( (micros()-tLAST)<dLimite1 ){}
     mudaPot( 0 );
-    while (micros()<Limite2){}
+    while ( (micros()-tLAST)<dLimite2 ){}
     mudaPot( potOnAtu );
+    tLAST += dLimite2;
     if (DEBUG){
-      Serial.print( Limite1 );
+      Serial.print( dLimite1 );
       Serial.print( " a " );
-      Serial.println( Limite2 );
+      Serial.println( dLimite2 );
     }
   }
-  tLAST = Limite2;
-  tNEXT = 0;
+  dtNEXT = 0;
 }
 
 
@@ -85,17 +93,21 @@ void fazJumps(float DF, long DtRep_uL, long nJumps){
     Serial.println( F2 );
   }
   float newFase = F2;
-  unsigned long Limite = max( tNEXT, micros()+DtZero_uL );
+  unsigned long dLimite = dtNEXT;
+  if ((micros()-tLAST)>dtNEXT){
+    tLAST = micros();
+    dLimite = DtZero_uL;
+  }
   for (long i=0; i<nJumps; i++ ){
     if (i>0){
-      Limite += DtRep_uL;
+      dLimite = DtRep_uL;
     }
-    while (micros()<Limite) {}
+    while ( (micros()-tLAST)<dLimite) {}
     mudaFase( newFase, false );
     newFase = F1+F2-newFase;
+    tLAST += dLimite;
   }
-  tLAST = Limite;
-  tNEXT = 0;
+  dtNEXT = 0;
 }
 
 
@@ -113,17 +125,22 @@ void fazSteps(float DF, long Steps, long Dt_uL){
   }
   float Fini = faseAtual;
   float Ffin = Fini + DF;
-  unsigned long Limite = max( tNEXT, micros()+DtZero_uL );
+  unsigned long dLimite = dtNEXT;
+  if ((micros()-tLAST)>dtNEXT){
+    tLAST = micros();
+    dLimite = DtZero_uL;
+  }
+
   for (long i=0; i<=Steps; i++){
     if (i>0){
-      Limite += Dt_uL;
+      dLimite = Dt_uL;
     }
     float Fatu = Fini + float(i*(Ffin-Fini))/max(Steps,1);
-    while( micros()<Limite ){}
+    while( (micros()-tLAST)<dLimite ){}
     mudaFase( Fatu, false );
+    tLAST += dLimite;
   }
-  tLAST = Limite;
-  tNEXT = 0;
+  dtNEXT = 0;
 }
 
 
