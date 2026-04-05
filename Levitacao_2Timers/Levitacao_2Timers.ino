@@ -6,7 +6,9 @@
 //                 para nao precisar de inversor externo
 
 #define TIPOTimer 1
-#define VERSAO "v1.0.9"
+
+#define VERSAO "v1.0.10"
+// v1.0.10 de 25-26/03/2024 (adicionado os botoes)
 // v1.0.9 de 02/03/2024 (tNEXT->dtNEXT, p/ evitar overflow do micros)
 // v1.0.8.1 de 02/03/2024 (mudanca inicializacao do pinControle->Input)
 // v1.0.8 de 24/12/2023 (mudanca na forma de entrada do texto)
@@ -59,7 +61,7 @@ char str1COMANDOs[nCOMANDOsMax];
 char str2COMANDOs[nCOMANDOsMax];
 long int3COMANDOs[nCOMANDOsMax];
 
-bool ESCREVE = false;
+bool ESCREVE = true;
 bool DEBUG = false;
 bool COMENTA = true;
 bool REVERSO = false; // para indicar se inverte a defasagem
@@ -82,16 +84,20 @@ char endChar = 13;
 String endStr = String(endChar);
 
 String memos[] = {"'botao',A0H;w10;A0L;", 
-                  "'ciclo',u;d;", 
-                  "d;u;", 
-                  "R(2){[3]}",
-                  "'queda',w300;p0;w700;", 
-                  "M8 M1 M5 M1 M9 p1", 
-                  "'ativa DEBUG',_DEBUG_true", 
+                  "'queda',w300;p0;w700;p1", 
+                  "M1 M2",
                   "_ESCREVE_false", 
-                  "_REVERSO_true" };
+                  "'ativa DEBUG',_DEBUG_true", 
+                  "'up',u20", 
+                  "'down',d20",
+                  "'off 10 ms',w500;o10", 
+                  "'queda',w300;p0;w700;p1" };
 const int  nMemos = sizeof(memos)/sizeof(memos[0]);
 
+byte pinBotoes[] = {A2, A3, A4, A5};
+String botoes[] = {"M6", "M7", "M8", "M9"};
+const byte nBotoes = sizeof(pinBotoes)/sizeof(pinBotoes[0]);
+byte estadoBotoes[]={0, 0, 0, 0};
 
 
 // ------------- SETUP ---------------- SETUP -------------------
@@ -121,14 +127,39 @@ void setup() {
 
   inStr.reserve(200);
   apagaCOMANDOs();
+  for (byte b=0; b<nBotoes; b++){
+    pinMode( pinBotoes[b], INPUT_PULLUP );
+  }
 }
 // ---------- end of SETUP ---------------- end of SETUP ---------------
-
-
 
 // ------------- LOOP ---------------- LOOP ------------------------
 void loop() {
   if (COMANDOsAtu==-1){
+    if ((inStr.length()==0)&&(nCOMANDOs==0)){
+      for (byte b=0; b<nBotoes; b++){
+        if (digitalRead(pinBotoes[b])==LOW){
+          if (estadoBotoes[b]==0){
+            inStr += botoes[b];
+            inStr += endChar;
+            if (DEBUG){
+              Serial.println( inStr );
+              Serial.println( nCOMANDOs );
+              Serial.println( COMANDOsAtu );
+            }
+            strOk = true;
+            estadoBotoes[b] = 255;
+            break;
+          }else{
+            estadoBotoes[b] = 255;
+          }
+        }else{
+          if (estadoBotoes[b]>0){
+            estadoBotoes[b] -= 1;
+          }
+        }
+      }
+    }    
     while (Serial.available()>0){
       addChar();
     }
