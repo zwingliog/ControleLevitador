@@ -11,13 +11,13 @@
 // para uma dada frequencia usar iMax=(8000kHz/f)-1
 // Com emissores de f=40kHz, usar iMax=199
 // Com emissores de f=25kHz, usar iMax=319
-//int iMax = 199; // para f=40kHz
-int iMax = 319; // para f=25kHz
+int iMax = 199; // para f=40kHz
+//int iMax = 319; // para f=25kHz
 
 // define o pino digital que controlará a alimentacao 
 // dos emissores (o sinal de EnA da ponte-H).
 // So nao pode ser um dos pinos do Timer1 (9 e 10) 
-// nem os pinos de comunicacao serial
+// nem os pinos de comunicacao serial (0 e 1)
 byte pinoEnA = 8;
 
 // Parametros iniciais
@@ -26,6 +26,7 @@ bool potenciaAtual = true;
 void setup() {
   Serial.begin(250000);
   Serial.println( F("Controlador Elementar - ExpLev") );
+  Serial.println( F("versão 1.0") );
   expLevShowHelp(0);
   Serial.setTimeout( 200 );
   expLevConfiguraTimer1();
@@ -82,7 +83,7 @@ void loop() {
         expLevShowHelp(-1);
       }
     }else{
-      Serial.print( F("Comando invalido") );
+      Serial.print( F("Comando invalido: ") );
       Serial.println( proxChar );
     }      
   }
@@ -94,8 +95,8 @@ void expLevConfiguraTimer1(){
   pinMode( 9, OUTPUT ); // OC1A = 9
   pinMode( 10, OUTPUT ); // OC1B = 10
  
-  // Parar os os timers do Arduino
-  GTCCR = 0b10000011; // na base decimal é 131
+  // Parar os os timers 0 e 1 do Arduino
+  GTCCR = 0b10000001; // na base decimal é 129
   
   // Definir o timer 1 como CTC com TOP no OCR1A
   // Definir o prescaler do Timer 1 para 1
@@ -158,17 +159,18 @@ void expLevShowHelp(int tipo){
     Serial.print( ", Pot. " );
     Serial.println( potenciaAtual? "On" : "Off" );
   }
-  if (tipo>=0){
-    Serial.println( F("Comandos validos:") );
+  if (tipo>=0){    
     if (tipo==0){
-      Serial.println( F("p$ - set pot $ (0 or 1)" ) );
+      Serial.println( F("Commands:") );
+      Serial.println( F("p# - set pot to # (# = 0 or 1)" ) );
       Serial.println( F("o# - off #ms" ) );
-      Serial.println( F("c$,@,# - cyles: $ rep of o# in each @ms" ) );
-      Serial.println( F("i$ - set iMax to $" ) );
+      Serial.println( F("c$,@,# - $ cycles in each @ms of o# command" ) );
+      Serial.println( F("i# - set iMax to # [freq=16000/(2*(iMax+1)) kHz]" ) );
       Serial.println( F("s - status (iMax, f(iMax), Pot)" ) );
       Serial.println( F("? - short Help (this help)" ) );
       Serial.println( F("h - full Help" ) );
     }else{
+      Serial.println( F("Comandos validos:") );
       Serial.println( F("p0 ou p1 -> Desliga (p0) ou liga (p1)") );
       Serial.println( F("      os emissores. Para exp. de queda") );
       Serial.println( F("o# -> Desliga os emissores por # ms.") );
@@ -179,7 +181,7 @@ void expLevShowHelp(int tipo){
       Serial.println( F("      Para exp. de oscilacoes forcadas") );
       Serial.println( F("      ($ um numero inteiro >0)") );
       Serial.println( F("      (@ e # numeros >0.0, com @>#)") );
-      Serial.println( F("i$ -> Define iMax em $ ciclos de clock") );
+      Serial.println( F("i# -> Define iMax em # ciclos de clock") );
       Serial.println( F("      A frequencia sera 8MHz/(iMax+1)") );
       Serial.println( F("s   -> Mostra configuracoes (iMax, freq., Pot)" ) );
       Serial.println( F("?   -> Lembrete dos comandos" ) );
