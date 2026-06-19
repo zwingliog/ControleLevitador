@@ -4,6 +4,8 @@
 //   nControles
 //   modoControle
 //   valorControle
+//   memos
+//   botoes
 
 //void fazOff(float DtOff){
 void fazOff(unsigned long DtOff_uL){
@@ -24,11 +26,6 @@ void fazOff(unsigned long DtOff_uL){
   mudaPot( 0 );
   while ( (micros()-tLAST)<dLimite2 ){}
   mudaPot( potOnAtu );
-  if (DEBUG){
-    Serial.print( tLAST + dLimite1 );
-    Serial.print( " a " );
-    Serial.println( tLAST + dLimite2 );
-  }
   tLAST += dLimite2;
   dtNEXT = 0;
 }
@@ -40,9 +37,9 @@ void fazOnOffCycles(unsigned long DtOff_uL,
     Serial.println( F("fazOnOffCycles(DtOff, DtRep, nCiclos)") );
     Serial.print( F("fazOnOffCycles(") );
     Serial.print( DtOff_uL );
-    Serial.print( ", " );
+    Serial.print( F(", ") );
     Serial.print( DtRep_uL );
-    Serial.print( ", " );
+    Serial.print( F(", ") );
     Serial.print( nCiclos );
     Serial.println( ")" );
   }
@@ -63,11 +60,6 @@ void fazOnOffCycles(unsigned long DtOff_uL,
     while ( (micros()-tLAST)<dLimite2 ){}
     mudaPot( potOnAtu );
     tLAST += dLimite2;
-    if (DEBUG){
-      Serial.print( dLimite1 );
-      Serial.print( " a " );
-      Serial.println( dLimite2 );
-    }
   }
   dtNEXT = 0;
 }
@@ -80,9 +72,9 @@ void fazJumps(float DF, long DtRep_uL, long nJumps){
     Serial.println( F("fazJumps(DF, DtRep_uL, nJumps)") );
     Serial.print( F("fazJumps(") );
     Serial.print( DF );
-    Serial.print( ", " );
+    Serial.print( F(", ") );
     Serial.print( DtRep_uL );
-    Serial.print( ", " );
+    Serial.print( F(", ") );
     Serial.print( nJumps );
     Serial.println( ")" );
   }
@@ -117,9 +109,9 @@ void fazSteps(float DF, long Steps, long Dt_uL){
     Serial.println( F("fazSteps(DF, Steps, Dt_uL)") );
     Serial.print( F("fazSteps(") );
     Serial.print( DF );
-    Serial.print( ", " );
+    Serial.print( F(", ") );
     Serial.print( Steps );
-    Serial.print( ", " );
+    Serial.print( F(", ") );
     Serial.print( Dt_uL );
     Serial.println( ")" );
   }
@@ -141,137 +133,4 @@ void fazSteps(float DF, long Steps, long Dt_uL){
     tLAST += dLimite;
   }
   dtNEXT = 0;
-}
-
-
-
-
-void mostraImax(){
-  Serial.print( F("iMax=") );
-  Serial.print( Imax );
-  Serial.print( " (" );
-  Serial.print( 8000.0/(Imax+1) );
-  Serial.println( "kHz)" );
-}
-
-void mostraFase(){
-  Serial.print( F("phase=") );
-  Serial.println( faseAtual );
-  Serial.print( F("real phase=") );
-  Serial.println( faseAtualReal );
-}
-
-void mostraPot(){
-  Serial.print( F("Pot=") );
-  Serial.print( potAtual );
-  if (potAtual==0){
-    Serial.println( F(" :off*2") );
-  }else if (potAtual==1){
-    Serial.println( F(" :on*2") );
-  }else if (potAtual==2){
-    Serial.println( F(" :on-off") );
-  }else if (potAtual==3){
-    Serial.println( F(" :off-on") );
-  }
-}
-
-void mostraDelayT(){
-  Serial.print( F("DelayT=") );
-  Serial.println( DelayT );
-  Serial.print( F("DelayTRep=") );
-  Serial.println( DelayTRep );
-}
-
-void mostraMemos(){
-  Serial.print( F("number of memos: ") );
-  Serial.println( nMemos );
-  for (int i=1; i<=nMemos; i++){  
-    mostraMemos(i);
-  }
-}
-void mostraMemos( int QUAL){
-  if (ehMemoValido(QUAL)){
-    if (memos[QUAL-1].length()>0){
-      Serial.print( F("M") );
-      Serial.print( QUAL );
-      Serial.print( ":" );
-      Serial.println( memos[QUAL-1] );
-    }
-  }
-}
-
-void mostraControles(){
-  for (int qC=0; qC<nControles; qC++){
-    if (qC>0)
-      Serial.print( F(" ") );
-    mostraControles(qC,false);
-  }
-  Serial.println();
-}
-void mostraControles(int QUAL){
-  mostraControles(QUAL, true);
-}
-void mostraControles(int QUAL, bool TERMINA){
-  if (ehControleValido(QUAL)){
-    Serial.print( F("A") );
-    Serial.print( QUAL );
-    Serial.print( F(":") );
-    Serial.print( (valorControle[QUAL]==LOW)? "L": "H" );
-    Serial.print( F(",") );
-    Serial.print( (modoControle[QUAL]==OUTPUT)? "O": "I" );
-    if (TERMINA)
-      Serial.println();
-  }
-}
-
-
-
-void mostraStatus(){
-  mostraImax();
-  mostraFase();
-  mostraPot();
-  mostraDelayT();
-  mostraMemos();
-  mostraControles();
-  //Serial.print( F("micros/1e6=") );
-  //Serial.println( micros()/1e6 );
-}
-
-
-
-void mostraHelpComandos(){
-  mostraHelpComandos( false );
-}
-void mostraHelpComandos(bool DETALHADO){
-  Serial.println( F("List of valid commands:") );
-  Serial.println( F("? > status [ ? ]") );
-  Serial.println( F("w > wait (short) [ w DelayT ] (ms)") );
-  Serial.println( F("W > wait (long) [ W DelayTRep ] (s)") );
-  Serial.println( F("t > set DelayT [ t newDelayT ]  (ms)") );
-  Serial.println( F("T > set DelayTRep [ t newDelayTRep ] (s)") );
-  Serial.println( F("p > set Pot [ p newP ]  p?->mostra Pot") );
-  Serial.println( F("f > set Phase [ f newF ]  f?->mostra Phase") );
-  Serial.println( F("o > off [ o DtOff ]") );
-  Serial.println( F("c > on-off cycles [ c DtOff, DtRep, nCycles ]") );
-  Serial.println( F("j > jump [ j DeltaF, DtRep, nJumps ]") );
-  Serial.println( F("u > up (360 degrees) [ u Dt ]") );
-  Serial.println( F("d > down (360 degrees) [ d Dt ]") );
-  Serial.println( F("s > switch (in steps) [ s DF, Dt ]") );
-  Serial.println( F("S > switch (in steps) [ S DF, Steps, Dt ]") );
-  if (DETALHADO){
-    Serial.println( F("i > define Imax [ i Imax ]   i?->mostra IMax") );
-    Serial.println( F("A > set port A0 to A5 [ A 0-5, H_L_I_O ] *A?->mostra") );
-    Serial.println( F("M > recover from Memory [ M 1-9 ] M?->mostra Memos" ) );
-    Serial.println( F("> > save to Memory [ > 1-9: @ ] >?->mostra Memos") );
-    Serial.println( F("R > Repeat [ R(#){@} ]") );
-    Serial.println( F("_ > set global variable [_@_VALOR] ...") );
-    Serial.println( F("    where @=(DEBUG, ESCREVE, REVERSO, DtZeroPadrao)") );
-    Serial.println( F("    true, false or value in us for DtZeroPadrao") );
-  }
-  Serial.println( F("h > help [ h ]=simple help,  [h1]=full help") );
-  if (DETALHADO){
-    Serial.println( F(" OBS1: in 'S': Steps may be '!' ou '$':") );
-    Serial.println( F("              '!'->2*(iMax+1) e '$'->(iMax+1)/2 per 360 degrees") );
-    Serial.println( F(" OBS2: in 'f': '*'+DF=current phase+DF") );
-  }
 }

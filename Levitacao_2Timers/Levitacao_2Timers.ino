@@ -7,7 +7,8 @@
 
 #define TIPOTimer 1
 
-#define VERSAO "v1.0.10"
+#define VERSAO "v2026.1"
+// v2026.1 de 19/06/2026 (editar botoes + Rep<0->tempo + flip + B_...ino->B_,C_,D_)
 // v1.0.10 de 25-26/03/2024 (adicionado os botoes)
 // v1.0.9 de 02/03/2024 (tNEXT->dtNEXT, p/ evitar overflow do micros)
 // v1.0.8.1 de 02/03/2024 (mudanca inicializacao do pinControle->Input)
@@ -61,9 +62,10 @@ char str1COMANDOs[nCOMANDOsMax];
 char str2COMANDOs[nCOMANDOsMax];
 long int3COMANDOs[nCOMANDOsMax];
 
-bool ESCREVE = true;
+bool ESCREVE = false;
 bool DEBUG = false;
 bool COMENTA = true;
+bool AVISATERMINOU = true;
 bool REVERSO = false; // para indicar se inverte a defasagem
 // int PASSO = -1; // para definir o passo padrão:-1="$", -2="!"
 float DtZeroPadrao = 0.05;
@@ -86,19 +88,18 @@ String endStr = String(endChar);
 String memos[] = {"'botao',A0H;w10;A0L;", 
                   "'queda',w300;p0;w700;p1", 
                   "M1 M2",
-                  "_ESCREVE_false", 
-                  "'ativa DEBUG',_DEBUG_true", 
+                  "'inverte ESCREVE', _ESCREVE_flip", 
+                  "'inverte DEBUG', _DEBUG_flip", 
                   "'up',u20", 
                   "'down',d20",
                   "'off 10 ms',w500;o10", 
                   "'queda',w300;p0;w700;p1" };
-const int  nMemos = sizeof(memos)/sizeof(memos[0]);
+const byte nMemos = sizeof(memos)/sizeof(memos[0]);
 
 byte pinBotoes[] = {A2, A3, A4, A5};
 String botoes[] = {"M6", "M7", "M8", "M9"};
 const byte nBotoes = sizeof(pinBotoes)/sizeof(pinBotoes[0]);
 byte estadoBotoes[]={0, 0, 0, 0};
-
 
 // ------------- SETUP ---------------- SETUP -------------------
 void setup() {
@@ -129,6 +130,7 @@ void setup() {
   apagaCOMANDOs();
   for (byte b=0; b<nBotoes; b++){
     pinMode( pinBotoes[b], INPUT_PULLUP );
+    //Serial.println( pinBotoes[b] );
   }
 }
 // ---------- end of SETUP ---------------- end of SETUP ---------------
@@ -169,131 +171,133 @@ void loop() {
       strOk = false;
     }
   } else {
-    char newCOMANDO = COMANDOs[COMANDOsAtu];
-    bool emLoop = false;
-    
-    if (newCOMANDO=='w'){
-      dtNEXT = dtNEXT + int1COMANDOs[COMANDOsAtu];
+    while( COMANDOsAtu>=0 ){  //adiconado em 19/06/2026 (controla melhor o tempo)
+      char newCOMANDO = COMANDOs[COMANDOsAtu];
+      bool emLoop = false;
       
-    }else if (newCOMANDO=='I'){
-        mostraImax();
-    }else if (newCOMANDO=='i'){
-      // addCOMANDOs( 'i', newImax );
-      if (dtNEXT){
-        while( (micros()-tLAST)<dtNEXT ){}
-        tLAST += dtNEXT;
-      }else{
-        tLAST = micros();
-      }          
-      mudaImax( int1COMANDOs[COMANDOsAtu], faseAtual );
-      dtNEXT = 0;
-
-    }else if (newCOMANDO=='P'){
-        mostraPot();
-    }else if (newCOMANDO=='p'){
-      // addCOMANDOs( 'p', newP );
-      if (dtNEXT){
-        while( (micros()-tLAST)<dtNEXT ){}
-        tLAST += dtNEXT;
-      }else{
-        tLAST = micros();
-      }
-      mudaPot( int1COMANDOs[COMANDOsAtu] );
-      dtNEXT = 0;
-    
-    }else if (newCOMANDO=='F'){
-        mostraFase();
-    }else if (newCOMANDO=='f'){
-      if (dtNEXT){
-        while( (micros()-tLAST)<dtNEXT ){}
-        tLAST += dtNEXT;
-      }else{
-        tLAST = micros();
-      }
-      float newF = (int1COMANDOs[COMANDOsAtu]==1)? faseAtual:0.;
-      newF += float1COMANDOs[COMANDOsAtu];
-      mudaFase( newF, true );
-      dtNEXT = 0;
-      
-    }else if (newCOMANDO=='o'){
-      // addCOMANDOs( 'o' DtOff_uL );
-      fazOff( int1COMANDOs[COMANDOsAtu] );
-    
-    }else if (newCOMANDO=='c'){
-      // addCOMANDOs( 'c', DtOff_uL, DtRep_uL, nCiclos );
-      fazOnOffCycles( int1COMANDOs[COMANDOsAtu], 
-                      int2COMANDOs[COMANDOsAtu], 
-                      int3COMANDOs[COMANDOsAtu] );
-    
-    }else if (newCOMANDO=='j'){
-      // addCOMANDOs( 'j', nJumps, DtRep_uL, DF );
-      fazJumps( float1COMANDOs[COMANDOsAtu], 
-                int2COMANDOs[COMANDOsAtu], 
-                int1COMANDOs[COMANDOsAtu]);
-    
-    }else if (newCOMANDO=='s'){
-      // addCOMANDOs( 's', Steps, Dt_uL, DF );
-      //fazSteps(float DF, long Steps, long Dt_uL)
-      fazSteps(float1COMANDOs[COMANDOsAtu],
-               int1COMANDOs[COMANDOsAtu],
-               int2COMANDOs[COMANDOsAtu] );
-    
-    }else if (newCOMANDO=='a'){
-        mostraControles();
-    }else if (newCOMANDO=='A'){
-      // addCOMANDOs('A',qualControle,strModo,strValue);
-      char strModo = str1COMANDOs[COMANDOsAtu];
-      char strValue = str2COMANDOs[COMANDOsAtu];
-      int qualControle = int1COMANDOs[COMANDOsAtu];
-      if (dtNEXT){
-        while( (micros()-tLAST)<dtNEXT ){}
-        tLAST += dtNEXT;
-      }else{
-        tLAST = micros();
-      }
-      if (strModo!=' '){
-        if (strModo=='#'){
-          strModo = 
-            (modoControle[qualControle]==INPUT)? 'O':'I';
+      if (newCOMANDO=='w'){
+        dtNEXT = dtNEXT + int1COMANDOs[COMANDOsAtu];
+        
+      }else if (newCOMANDO=='I'){
+          mostraImax();
+      }else if (newCOMANDO=='i'){
+        // addCOMANDOs( 'i', newImax );
+        if (dtNEXT){
+          while( (micros()-tLAST)<dtNEXT ){}
+          tLAST += dtNEXT;
+        }else{
+          tLAST = micros();
+        }          
+        mudaImax( int1COMANDOs[COMANDOsAtu], faseAtual );
+        dtNEXT = 0;
+  
+      }else if (newCOMANDO=='P'){
+          mostraPot();
+      }else if (newCOMANDO=='p'){
+        // addCOMANDOs( 'p', newP );
+        if (dtNEXT){
+          while( (micros()-tLAST)<dtNEXT ){}
+          tLAST += dtNEXT;
+        }else{
+          tLAST = micros();
         }
-        modoControle[qualControle] = 
-                    (strModo=='I')? INPUT: OUTPUT;
-        pinMode( pinControle[qualControle], 
-                 modoControle[qualControle] );
-      }
-      if (strValue!=' '){
-        if (strValue=='*'){
-          strValue = 
-            (valorControle[qualControle]==LOW)? 'H':'L';
-        }
-        valorControle[qualControle] = 
-                     (strValue=='L')? LOW : HIGH;
-        digitalWrite( pinControle[qualControle], 
-               valorControle[qualControle] );
-      }
-      dtNEXT = 0;
-      if (ESCREVE){ mostraControles( qualControle ); }
-
-    }else if (newCOMANDO=='L'){
-      //addCOMANDOs( 'L', nLoop, nCOMANDOInicioLoop, nLoop );
-      long nLoop = int1COMANDOs[COMANDOsAtu];
-      if (nLoop>0){
-        int1COMANDOs[COMANDOsAtu] = nLoop-1;
-        COMANDOsAtu = int2COMANDOs[COMANDOsAtu];
-        emLoop = true;
-      }else{
-        int1COMANDOs[COMANDOsAtu] = int3COMANDOs[COMANDOsAtu];
-      }
-    }
+        mudaPot( int1COMANDOs[COMANDOsAtu] );
+        dtNEXT = 0;
       
-    if (COMANDOsAtu<nCOMANDOs){
-      if (!emLoop){
-        COMANDOsAtu += 1;
+      }else if (newCOMANDO=='F'){
+          mostraFase();
+      }else if (newCOMANDO=='f'){
+        if (dtNEXT){
+          while( (micros()-tLAST)<dtNEXT ){}
+          tLAST += dtNEXT;
+        }else{
+          tLAST = micros();
+        }
+        float newF = (int1COMANDOs[COMANDOsAtu]==1)? faseAtual:0.;
+        newF += float1COMANDOs[COMANDOsAtu];
+        mudaFase( newF, true );
+        dtNEXT = 0;
+        
+      }else if (newCOMANDO=='o'){
+        // addCOMANDOs( 'o' DtOff_uL );
+        fazOff( int1COMANDOs[COMANDOsAtu] );
+      
+      }else if (newCOMANDO=='c'){
+        // addCOMANDOs( 'c', DtOff_uL, DtRep_uL, nCiclos );
+        fazOnOffCycles( int1COMANDOs[COMANDOsAtu], 
+                        int2COMANDOs[COMANDOsAtu], 
+                        int3COMANDOs[COMANDOsAtu] );
+      
+      }else if (newCOMANDO=='j'){
+        // addCOMANDOs( 'j', nJumps, DtRep_uL, DF );
+        fazJumps( float1COMANDOs[COMANDOsAtu], 
+                  int2COMANDOs[COMANDOsAtu], 
+                  int1COMANDOs[COMANDOsAtu]);
+      
+      }else if (newCOMANDO=='s'){
+        // addCOMANDOs( 's', Steps, Dt_uL, DF );
+        //fazSteps(float DF, long Steps, long Dt_uL)
+        fazSteps(float1COMANDOs[COMANDOsAtu],
+                 int1COMANDOs[COMANDOsAtu],
+                 int2COMANDOs[COMANDOsAtu] );
+      
+      }else if (newCOMANDO=='a'){
+          mostraControles();
+      }else if (newCOMANDO=='A'){
+        // addCOMANDOs('A',qualControle,strModo,strValue);
+        char strModo = str1COMANDOs[COMANDOsAtu];
+        char strValue = str2COMANDOs[COMANDOsAtu];
+        int qualControle = int1COMANDOs[COMANDOsAtu];
+        if (dtNEXT){
+          while( (micros()-tLAST)<dtNEXT ){}
+          tLAST += dtNEXT;
+        }else{
+          tLAST = micros();
+        }
+        if (strModo!=' '){
+          if (strModo=='#'){
+            strModo = 
+              (modoControle[qualControle]==INPUT)? 'O':'I';
+          }
+          modoControle[qualControle] = 
+                      (strModo=='I')? INPUT: OUTPUT;
+          pinMode( pinControle[qualControle], 
+                   modoControle[qualControle] );
+        }
+        if (strValue!=' '){
+          if (strValue=='*'){
+            strValue = 
+              (valorControle[qualControle]==LOW)? 'H':'L';
+          }
+          valorControle[qualControle] = 
+                       (strValue=='L')? LOW : HIGH;
+          digitalWrite( pinControle[qualControle], 
+                 valorControle[qualControle] );
+        }
+        dtNEXT = 0;
+        if (ESCREVE){ mostraControles( qualControle ); }
+  
+      }else if (newCOMANDO=='L'){
+        //addCOMANDOs( 'L', nLoop, nCOMANDOInicioLoop, nLoop );
+        long nLoop = int1COMANDOs[COMANDOsAtu];
+        if (nLoop>0){
+          int1COMANDOs[COMANDOsAtu] = nLoop-1;
+          COMANDOsAtu = int2COMANDOs[COMANDOsAtu];
+          emLoop = true;
+        }else{
+          int1COMANDOs[COMANDOsAtu] = int3COMANDOs[COMANDOsAtu];
+        }
       }
-    }else{
-      COMANDOsAtu = -1;
-      apagaCOMANDOs();
-      if (ESCREVE){ Serial.println('.'); }
+        
+      if (COMANDOsAtu<nCOMANDOs){
+        if (!emLoop){
+          COMANDOsAtu += 1;
+        }
+      }else{
+        COMANDOsAtu = -1;
+        apagaCOMANDOs();
+        if (ESCREVE || DEBUG || AVISATERMINOU){ Serial.println('.'); }
+      }
     }
   }
   if (dtNEXT){
@@ -451,9 +455,15 @@ void loop() {
           if (jaTerminou()){
             nCiclos = 1;
           }else{
-            nCiclos = myParseInt();
-            if (nCiclos<=0)
-              nCiclos = 1;
+            float valorCiclos = myParseFloat();
+            //Serial.println( valorCiclos );
+            if (valorCiclos>=0){
+              nCiclos = valorCiclos;
+              if (nCiclos==0)
+                nCiclos = 1;
+            }else{
+              nCiclos = (-valorCiclos + 0.5*DtRep)/DtRep;
+            }
           }
         }
       }
@@ -484,9 +494,14 @@ void loop() {
             DtRep = myParseFloat();
           }
           if (!jaTerminou()){
-            nJumps = myParseInt();
-            if (nJumps<=0)
-              nJumps = 1;
+            float valorJumps = myParseFloat();
+            if (valorJumps>=0){
+              nJumps = valorJumps;
+              if (nJumps==0)
+                nJumps = 1;
+            }else{
+              nJumps = (-valorJumps + 0.5*DtRep)/DtRep;
+            }
           }
         }
         if (DF!=0.){
@@ -610,7 +625,24 @@ void loop() {
 
 
 
-
+    }else if (Sp=='B'){
+      myRead();
+      if (myPeek()=='?'){
+        mostraBotoes();
+        myRead();
+      }else{
+        int numBotao = myParseInt();
+        if ( ehBotaoValido(numBotao) && (inStr.charAt(0)=='>') ){
+          myRead();
+          int nextEnd = inStr.indexOf(endChar);
+          if (nextEnd>=0){
+            botoes[numBotao-1] = inStr.substring(0,nextEnd);
+            inStr.remove(0,nextEnd+1);
+            if (ESCREVE){ mostraBotoes(numBotao); }
+          }
+				}					
+      }
+      
     }else if (Sp=='M'){
       myRead();
       if (myPeek()=='?'){
@@ -618,7 +650,7 @@ void loop() {
         myRead();
       }else{
         int numMemo = myParseInt();
-        if ((numMemo>=1) && (numMemo<=nMemos)){
+        if ( ehMemoValido(numMemo) ){
           inStr = memos[numMemo-1] + inStr;
         }
       }  
@@ -684,6 +716,9 @@ void loop() {
         }else if (inStr.startsWith(String("false"))){
           inStr.remove(0,5);
           DEBUG = false;
+        }else if (inStr.startsWith(String("flip"))){
+          inStr.remove(0,4);
+          DEBUG = !DEBUG;
         }
       }else if (inStr.startsWith(String("ESCREVE_"))){
         inStr.remove(0,8);
@@ -693,6 +728,9 @@ void loop() {
         }else if (inStr.startsWith(String("false"))){
           inStr.remove(0,5);
           ESCREVE = false;
+        }else if (inStr.startsWith(String("flip"))){
+          inStr.remove(0,4);
+          ESCREVE = !ESCREVE;
         }
       }else if (inStr.startsWith(String("REVERSO_"))){
         inStr.remove(0,8);
@@ -702,6 +740,9 @@ void loop() {
         }else if (inStr.startsWith(String("false"))){
           inStr.remove(0,5);
           REVERSO = false;
+        }else if (inStr.startsWith(String("flip"))){
+          inStr.remove(0,4);
+          REVERSO = !REVERSO;
         }
       }else if (inStr.startsWith(String("COMENTA_"))){
         inStr.remove(0,8);
@@ -711,6 +752,9 @@ void loop() {
         }else if (inStr.startsWith(String("false"))){
           inStr.remove(0,5);
           COMENTA = false;
+        }else if (inStr.startsWith(String("flip"))){
+          inStr.remove(0,4);
+          COMENTA = !COMENTA;
         }
       }else if (inStr.startsWith(String("DtZeroPadrao_"))){
         inStr.remove(0,13);
@@ -725,6 +769,18 @@ void loop() {
         if (newDtZero_uL>0){
           DtZero_uL = newDtZero_uL;
           DtZeroPadrao = newDtZero_uL/1000.0;
+        }
+      }else if (inStr.startsWith(String("AVISATERMINOU_"))){
+        inStr.remove(0,14);
+        if (inStr.startsWith(String("true"))){
+          inStr.remove(0,4);
+          AVISATERMINOU = true;
+        }else if (inStr.startsWith(String("false"))){
+          inStr.remove(0,5);
+          AVISATERMINOU = false;
+        }else if (inStr.startsWith(String("flip"))){
+          inStr.remove(0,4);
+          AVISATERMINOU = !AVISATERMINOU;
         }
       }
 
@@ -882,11 +938,11 @@ byte removeEspaco(byte oqueMais1, byte oqueMais2){
 
 
 bool jaTerminou(){
-  byte terminouChar[] = { ';','w','t','p','f',
-                          'o','c','j','?','h',   
-                          'i','s','S','u','d',
-                          'W','T', 10, 13,'A',
-                          'M','>','R',39,'[','l' };
+  byte terminouChar[] = { ';', 'w', 't', 'p', 'f',
+                          'o', 'c', 'j', '?', 'h',   
+                          'i', 's', 'S', 'u', 'd',
+                          'W', 'T', '[', 'l', 'A',
+                          'M', '>', 'R', 'B', 10, 13, 39 };
   int nTerminouChar = sizeof(terminouChar)/sizeof(terminouChar[0]);
   byte pChar = removeEspaco(',');
   bool achou = false;
@@ -903,6 +959,10 @@ bool ehControleValido(int n){
 
 bool ehMemoValido(int n){
   return ((n>=1)&&(n<=nMemos));
+}
+
+bool ehBotaoValido(int n){
+  return ((n>=1)&&(n<=nBotoes));
 }
 
 void verificaColchetes(){
