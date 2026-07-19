@@ -47,7 +47,7 @@ void configuraTimer12(){
   TCCR2B = 1;
 
   // Para sincronizar os contadores
-  mudaFase( faseAtual, false );
+  mudaFase12( faseAtual, false );
 }
 
 
@@ -61,7 +61,7 @@ void mudaImax12( int newImax, float oldFase ){
   OCR2B = Imax;
   GTCCR = 0;
   interrupts();
-  mudaFase( oldFase, false );
+  mudaFase12( oldFase, false );
 }
 
 
@@ -74,10 +74,10 @@ void mudaFase12( float newFase, bool mostra ){
     nFase = -nFase;
   }
   while( nFase<0.0 ){
-    nFase = nFase + 360.0;
+    nFase += 360.0;
   }
   while( nFase>=360.0){
-    nFase = nFase - 360.0;
+    nFase -= 360.0;
   }
   int newD = (nFase/360.0)*Ip2 + 0.4999999;
   float newFaseReal = (newD*360.0)/Ip2;
@@ -111,16 +111,24 @@ void mudaFase12( float newFase, bool mostra ){
   interrupts();
   if ( (ESCREVE) && (mostra) ){
     Serial.print( F("f=") );
-    Serial.print( newFase );
+    if (newFase!=nFase){
+      Serial.print( newFase );
+      Serial.print( F(" -> ") );
+    }
+    Serial.print( nFase );
     Serial.print( F(" fR=") );
     Serial.print( newFaseReal );
-    Serial.print( F(", D=") );
-    Serial.print( newD );
-    Serial.print( F(", t1=") );
-    Serial.print( tcnt1 );
-    Serial.print( F(", t2=") );
-    Serial.println( tcnt2 );
+    if (DEBUG){
+      Serial.print( F(",D=") );
+      Serial.print( newD );
+      Serial.print( F(",t1=") );
+      Serial.print( tcnt1 );
+      Serial.print( F(",t2=") );
+      Serial.print( tcnt2 );
+    }
+    Serial.println();
   }
-  faseAtual = newFase;
+  //faseAtual = newFase;
+  faseAtual = nFase;
   faseAtualReal = newFaseReal;
 }

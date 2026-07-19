@@ -1,16 +1,20 @@
 // Levitacao_2Timers [controle da fase usando ICR1 ou Timers 1 e 2]
-// Gera sinais com defasagem escolhida
-// TIPOTimer=1  -> de 20 a 80kHz entre os pinos 9 e 10
-// TIPOTimer=12 -> de 32.15 a 80kHz entre (9,10) e (11,3)
-//                 [10 = not 9 ] e [3 = not 11]
-//                 para nao precisar de inversor externo
+// Gera sinais com a defasagem escolhida
+// TIPOTimer=1  -> entre os pinos 9 e 10 (de 244Hz a 400kHz)
+// TIPOTimer=12 -> entre (9,10) e (11,3) (de 31.25kHz a 400kHz)
+//                 [10 = not 9 ] e [3 = not 11] para nao usar inversor externo
+//#define TIPOTimer 1
+int TIPOTimer = 1;
 
-#define TIPOTimer 1
-
-#define VERSAO "v2026.1"
+#define VERSAO "v2026.5"
+// v2026.5 de 16-/07/2026 (t=DelayT e T=DelayTRep são variaveis para os comandos 'o', 'c' e 'j')
+// v2026.4 de 15-/07/2026 (adicionado espera '[...]' e if '#' com modificadores '^'->HIGH e '~'->flip)
+// v2026.31 de 13/07/2026 (aumento do intervalo de frequencias geradas, 'o' e 'c' invertem pot)
+// v2026.3 de 05-/07/2026 (DtRep do 'c' corrigido, separação em B0_..., B1_... e B2_....)
+// v2026.2 de 23-24/06/2026 (controle da EEPROM, forca nJumps a ser par, fReal de [0.0 a 360.0[)
 // v2026.1 de 19/06/2026 (editar botoes + Rep<0->tempo + flip + B_...ino->B_,C_,D_)
 // v1.0.10 de 25-26/03/2024 (adicionado os botoes)
-// v1.0.9 de 02/03/2024 (tNEXT->dtNEXT, p/ evitar overflow do micros)
+// v1.0.9 de 02/03/2024 (tNEXT -> tLAST e dtNEXT, para evitar overflow)
 // v1.0.8.1 de 02/03/2024 (mudanca inicializacao do pinControle->Input)
 // v1.0.8 de 24/12/2023 (mudanca na forma de entrada do texto)
 // v1.0.7 de 20/12/2023 (correcao dos tempos dos comandos)
@@ -30,14 +34,21 @@
 // versao de 30/10/2022 (primeira versao)
 //   OBS: nome anterior: "Levitacao_ControleLevitador"
 
-#define TIME_OUT  5
-int Imax = 199; // calculo preve 199 para 40kHz e 319 para 25kHz
-int fatorImax = 1; // fator multiplicativo do Imax para Timer2 (8-bits)
-int ImaxMIN = 99;
-int ImaxMAX = 399-144*(TIPOTimer==12);
-int ImaxMINgeral = 99;
-int ImaxMAXgeral = 399-144*(TIPOTimer==12);
-int DeltaOCR = 1;
+//#define TIME_OUT  5
+//#define pinEnA 5
+//#define pinEnB 6
+//#define pinEEPROM  13
+#define nCOMANDOsMax 25
+char pinEnA = 5;
+char pinEnB = 6;
+char pinEEPROM = 13;
+long baudRate = 250000;
+long timeOUT = 5;
+
+unsigned int Imax = 199; // f=16MHz/(2*(Imax+1)) preve 199 para 40kHz e 319 para 25kHz
+int fatorImax = 1; // fator multiplicativo do Imax para Timer2 (8-bits) (???)
+unsigned int ImaxMIN = 19; // mudado para 19 (400kHz) na v2026.31
+unsigned int ImaxMAX = (TIPOTimer==1)? 32767 : 255;// mudado na v2026.31 e na v2026.4
 float faseAtual = 0.0;
 float faseAtualReal = 0.0;
 int potAtual = 1;
@@ -48,19 +59,22 @@ float DelayTRep = 1000.0; // 1s (1000ms)
 unsigned long tLAST = 0;
 unsigned long dtNEXT = 0;
 
-#define nCOMANDOsMax 20
+// COMANDOs
+bool erroNoComando = false;
 int nCOMANDOs = 0;
-int COMANDOsAtu = -1;
-// COMANDOs, int1COMANDOs, int2COMANDOs, float1COMANDOs
-// float2COMANDOs, str1COMANDOs, str2COMANDOs 
+int COMANDOsAtual = -1;
+// COMANDOs, long1COMANDOs, long2COMANDOs, long3COMANDOs, 
+// float1COMANDOs, float2COMANDOs, str1COMANDOs, str2COMANDOs, intCOMANDOs
 char COMANDOs[nCOMANDOsMax];
-long int1COMANDOs[nCOMANDOsMax];
-long int2COMANDOs[nCOMANDOsMax];
+unsigned long long1COMANDOs[nCOMANDOsMax];
+unsigned long long2COMANDOs[nCOMANDOsMax];
+unsigned long long3COMANDOs[nCOMANDOsMax];
 float float1COMANDOs[nCOMANDOsMax];
 float float2COMANDOs[nCOMANDOsMax];
 char str1COMANDOs[nCOMANDOsMax];
 char str2COMANDOs[nCOMANDOsMax];
-long int3COMANDOs[nCOMANDOsMax];
+int intCOMANDOs[nCOMANDOsMax];
+
 
 bool ESCREVE = false;
 bool DEBUG = false;
@@ -68,16 +82,15 @@ bool COMENTA = true;
 bool AVISATERMINOU = true;
 bool REVERSO = false; // para indicar se inverte a defasagem
 // int PASSO = -1; // para definir o passo padrão:-1="$", -2="!"
-float DtZeroPadrao = 0.05;
+float DtZeroPadrao = 0.02;
 unsigned long DtZero_uL = 20;
 
-byte pinEnA = 5;
-byte pinEnB = 6;
-byte pinControle[] = {A0, A1, A2, A3, A4, A5};
-bool valorControle[] = {LOW, LOW, LOW, LOW, LOW, LOW};
-bool modoControle[] = {INPUT, INPUT, INPUT, INPUT, INPUT, INPUT};
-bool primeiroUsoControle[] = {true, true, true, true, true, true};
-const int nControles = sizeof(pinControle)/sizeof(pinControle[0]);
+const byte nControles = 2;
+byte pinControle[] = {A0, A1};
+bool valorControle[] = {LOW, LOW};
+bool modoControle[] = {INPUT, INPUT};
+bool primeiroUsoControle[] = {true, true};
+//const byte nControles = sizeof(pinControle)/sizeof(pinControle[0]);
 
 
 String inStr = "";
@@ -85,59 +98,75 @@ bool strOk = false;
 char endChar = 13;
 String endStr = String(endChar);
 
-String memos[] = {"'botao',A0H;w10;A0L;", 
-                  "'queda',w300;p0;w700;p1", 
+const byte nMemos = 9;
+String memos[] = {"'b';A0H;w10;A0L;", 
+                  "'q';w300;p0;w700;p1", 
                   "M1 M2",
-                  "'inverte ESCREVE', _ESCREVE_flip", 
-                  "'inverte DEBUG', _DEBUG_flip", 
-                  "'up',u20", 
-                  "'down',d20",
-                  "'off 10 ms',w500;o10", 
-                  "'queda',w300;p0;w700;p1" };
-const byte nMemos = sizeof(memos)/sizeof(memos[0]);
+                  "_ESCREVE>flip", 
+                  "_DEBUG>flip", 
+                  "'up';u20", 
+                  "'down';d20",
+                  "'o10ms';w500;o10", 
+                  "'q';w300;p0;w700;p1" };
+//const byte nMemos = sizeof(memos)/sizeof(memos[0]);
 
+const byte nBotoes = 4;
 byte pinBotoes[] = {A2, A3, A4, A5};
-String botoes[] = {"M6", "M7", "M8", "M9"};
-const byte nBotoes = sizeof(pinBotoes)/sizeof(pinBotoes[0]);
 byte estadoBotoes[]={0, 0, 0, 0};
+String botoes[] = {"'up';u20",
+                   "'down';d20",
+                   "'o10ms';w500;o10", 
+                   "'q';w300;p0;w700;p1" };
+//const byte nBotoes = sizeof(pinBotoes)/sizeof(pinBotoes[0]);
+
 
 // ------------- SETUP ---------------- SETUP -------------------
 void setup() {
 
-  Serial.begin(250000); // nao usar 230400- usar 250000 ou 115200
-  Serial.setTimeout( TIME_OUT );
+  pinMode( pinEEPROM, INPUT_PULLUP );
+  iniciaEEPROM(); // necessario para alterar valores padroes
 
+  Serial.begin(baudRate); // nao usar 230400- usar 250000 ou 115200
+  Serial.setTimeout( timeOUT );
+  Serial.println( F("Levitacao 2 Timers") );
+  Serial.println( VERSAO );
+  Serial.print( F("TIPOTimer:") );
+  Serial.println( TIPOTimer );
+  Serial.println( F("h->help; ?->status") );
+
+  
   configuraTimer();
-  pinMode( pinEnA, OUTPUT);
-  pinMode( pinEnB, OUTPUT);
+  pinMode( pinEnA, OUTPUT );
+  pinMode( pinEnB, OUTPUT );
   mudaPot( potAtual );
   for (int qControle=0; qControle<nControles; qControle++){
     pinMode( pinControle[qControle], modoControle[qControle] );
     digitalWrite( pinControle[qControle], valorControle[qControle] );
-  }  
-  Serial.println( F("Levitacao 2 Timers") );
-  Serial.println( VERSAO );
-  Serial.print( F("usando TIPOTimer = ") );
-  Serial.println( TIPOTimer );
-  Serial.println( F("digite h para help") );
-  Serial.println( F("digite ? para status") );
+  }
   mostraImax();
   //mostraFase();
   //mostraPot();
   //mostraMemos();
+  //mostraBotoes();
 
-  inStr.reserve(200);
+  inStr.reserve(150);
   apagaCOMANDOs();
   for (byte b=0; b<nBotoes; b++){
     pinMode( pinBotoes[b], INPUT_PULLUP );
-    //Serial.println( pinBotoes[b] );
   }
 }
 // ---------- end of SETUP ---------------- end of SETUP ---------------
+// ---------- end of SETUP ---------------- end of SETUP ---------------
+// ---------- end of SETUP ---------------- end of SETUP ---------------
+
+
+
 
 // ------------- LOOP ---------------- LOOP ------------------------
+// ------------- LOOP ---------------- LOOP ------------------------
+// ------------- LOOP ---------------- LOOP ------------------------
 void loop() {
-  if (COMANDOsAtu==-1){
+  if (COMANDOsAtual==-1){
     if ((inStr.length()==0)&&(nCOMANDOs==0)){
       for (byte b=0; b<nBotoes; b++){
         if (digitalRead(pinBotoes[b])==LOW){
@@ -147,7 +176,7 @@ void loop() {
             if (DEBUG){
               Serial.println( inStr );
               Serial.println( nCOMANDOs );
-              Serial.println( COMANDOsAtu );
+              Serial.println( COMANDOsAtual );
             }
             strOk = true;
             estadoBotoes[b] = 255;
@@ -171,132 +200,12 @@ void loop() {
       strOk = false;
     }
   } else {
-    while( COMANDOsAtu>=0 ){  //adiconado em 19/06/2026 (controla melhor o tempo)
-      char newCOMANDO = COMANDOs[COMANDOsAtu];
-      bool emLoop = false;
-      
-      if (newCOMANDO=='w'){
-        dtNEXT = dtNEXT + int1COMANDOs[COMANDOsAtu];
-        
-      }else if (newCOMANDO=='I'){
-          mostraImax();
-      }else if (newCOMANDO=='i'){
-        // addCOMANDOs( 'i', newImax );
-        if (dtNEXT){
-          while( (micros()-tLAST)<dtNEXT ){}
-          tLAST += dtNEXT;
-        }else{
-          tLAST = micros();
-        }          
-        mudaImax( int1COMANDOs[COMANDOsAtu], faseAtual );
-        dtNEXT = 0;
-  
-      }else if (newCOMANDO=='P'){
-          mostraPot();
-      }else if (newCOMANDO=='p'){
-        // addCOMANDOs( 'p', newP );
-        if (dtNEXT){
-          while( (micros()-tLAST)<dtNEXT ){}
-          tLAST += dtNEXT;
-        }else{
-          tLAST = micros();
-        }
-        mudaPot( int1COMANDOs[COMANDOsAtu] );
-        dtNEXT = 0;
-      
-      }else if (newCOMANDO=='F'){
-          mostraFase();
-      }else if (newCOMANDO=='f'){
-        if (dtNEXT){
-          while( (micros()-tLAST)<dtNEXT ){}
-          tLAST += dtNEXT;
-        }else{
-          tLAST = micros();
-        }
-        float newF = (int1COMANDOs[COMANDOsAtu]==1)? faseAtual:0.;
-        newF += float1COMANDOs[COMANDOsAtu];
-        mudaFase( newF, true );
-        dtNEXT = 0;
-        
-      }else if (newCOMANDO=='o'){
-        // addCOMANDOs( 'o' DtOff_uL );
-        fazOff( int1COMANDOs[COMANDOsAtu] );
-      
-      }else if (newCOMANDO=='c'){
-        // addCOMANDOs( 'c', DtOff_uL, DtRep_uL, nCiclos );
-        fazOnOffCycles( int1COMANDOs[COMANDOsAtu], 
-                        int2COMANDOs[COMANDOsAtu], 
-                        int3COMANDOs[COMANDOsAtu] );
-      
-      }else if (newCOMANDO=='j'){
-        // addCOMANDOs( 'j', nJumps, DtRep_uL, DF );
-        fazJumps( float1COMANDOs[COMANDOsAtu], 
-                  int2COMANDOs[COMANDOsAtu], 
-                  int1COMANDOs[COMANDOsAtu]);
-      
-      }else if (newCOMANDO=='s'){
-        // addCOMANDOs( 's', Steps, Dt_uL, DF );
-        //fazSteps(float DF, long Steps, long Dt_uL)
-        fazSteps(float1COMANDOs[COMANDOsAtu],
-                 int1COMANDOs[COMANDOsAtu],
-                 int2COMANDOs[COMANDOsAtu] );
-      
-      }else if (newCOMANDO=='a'){
-          mostraControles();
-      }else if (newCOMANDO=='A'){
-        // addCOMANDOs('A',qualControle,strModo,strValue);
-        char strModo = str1COMANDOs[COMANDOsAtu];
-        char strValue = str2COMANDOs[COMANDOsAtu];
-        int qualControle = int1COMANDOs[COMANDOsAtu];
-        if (dtNEXT){
-          while( (micros()-tLAST)<dtNEXT ){}
-          tLAST += dtNEXT;
-        }else{
-          tLAST = micros();
-        }
-        if (strModo!=' '){
-          if (strModo=='#'){
-            strModo = 
-              (modoControle[qualControle]==INPUT)? 'O':'I';
-          }
-          modoControle[qualControle] = 
-                      (strModo=='I')? INPUT: OUTPUT;
-          pinMode( pinControle[qualControle], 
-                   modoControle[qualControle] );
-        }
-        if (strValue!=' '){
-          if (strValue=='*'){
-            strValue = 
-              (valorControle[qualControle]==LOW)? 'H':'L';
-          }
-          valorControle[qualControle] = 
-                       (strValue=='L')? LOW : HIGH;
-          digitalWrite( pinControle[qualControle], 
-                 valorControle[qualControle] );
-        }
-        dtNEXT = 0;
-        if (ESCREVE){ mostraControles( qualControle ); }
-  
-      }else if (newCOMANDO=='L'){
-        //addCOMANDOs( 'L', nLoop, nCOMANDOInicioLoop, nLoop );
-        long nLoop = int1COMANDOs[COMANDOsAtu];
-        if (nLoop>0){
-          int1COMANDOs[COMANDOsAtu] = nLoop-1;
-          COMANDOsAtu = int2COMANDOs[COMANDOsAtu];
-          emLoop = true;
-        }else{
-          int1COMANDOs[COMANDOsAtu] = int3COMANDOs[COMANDOsAtu];
-        }
-      }
-        
-      if (COMANDOsAtu<nCOMANDOs){
-        if (!emLoop){
-          COMANDOsAtu += 1;
-        }
+    if( COMANDOsAtual>=0 ){
+      if (erroNoComando == false){
+        executaComandos();
       }else{
-        COMANDOsAtu = -1;
         apagaCOMANDOs();
-        if (ESCREVE || DEBUG || AVISATERMINOU){ Serial.println('.'); }
+        erroNoComando = false;
       }
     }
   }
@@ -307,506 +216,9 @@ void loop() {
     }
   }
   if ( strOk ){
-    verificaColchetes();
-        
-    byte Sp = removeEspaco();
-    if ( (Sp==10) || (Sp==13) || (Sp==',') || (Sp==';') ){
-      removeEspaco(Sp);
-
-    }else if( (Sp=='w') || (Sp=='W') ){ // w,W - wait
-      // w -> wait short (ms) : w [Dt]
-      // W -> Wait long (s) : W [DtRep]
-      if (tLAST==0){
-        tLAST = micros();
-      }
-      myRead();
-      float newDelay = 0.;
-      if (!jaTerminou()){
-        newDelay = myParseFloat();
-        if (Sp=='W'){
-          newDelay = 1000.0*newDelay;
-        }
-      }
-      if (newDelay==0.){
-        if (Sp=='w'){
-          newDelay = DelayT;
-        }else if (Sp=='W'){
-          newDelay = DelayTRep;
-        }
-      }
-      if (newDelay>0.){
-        addCOMANDOs('w',(1000uL*newDelay));
-        if (DEBUG){
-          Serial.print( F("Wait for ") );
-          Serial.print( newDelay );
-          Serial.println( F(" ms" ) );
-        }
-      }
-
-    }else if( (Sp=='t') || (Sp=='T') ){ // t, T -> set DelayT
-      // t -> set DelayT : t newDelayT
-      // t -> set DelayTRep : t newDelayTRep
-      myRead();
-      if ((!jaTerminou()) && (contaDigitosStr()>0)){
-        float newDelayT = myParseFloat();
-        if (newDelayT>0.){
-          if (Sp=='t'){
-            DelayT = newDelayT;
-          }else if (Sp=='T'){
-            DelayTRep = 1000.0*newDelayT;
-          }
-          if (ESCREVE){ mostraDelayT(); }
-        }
-      }
-
-
-      
-    }else if(Sp=='?'){ // ?-> status
-      myRead();
-      mostraStatus();
-      
-
-
-    }else if(Sp=='p'){
-      myRead();
-      if (myPeek()=='?'){
-        addCOMANDOs('P');
-        // VIROU_COMANDOs P
-        myRead();
-      }else if ((!jaTerminou())&&(contaDigitosStr()>0) ){
-        int newP = myParseInt();
-        if ( (newP>=-2)&&(newP<=3) ){
-          addCOMANDOs('p', newP);
-          // VIROU_COMANDOs p
-        }
-      }
-
-
-    }else if(Sp=='f'){
-      myRead();
-      if (myPeek()=='?'){
-        addCOMANDOs('F');
-        // VIROU_COMANDOs F
-        myRead();
-      }else if (!jaTerminou()){
-        int faseRelativa = 0;
-        if ( removeEspaco()=='*' ){
-          removeEspaco('*');
-          faseRelativa = 1;
-        }
-        if (contaDigitosStr()>0){
-          float newDF = myParseFloat();
-          addCOMANDOs('f', faseRelativa, 0, newDF);
-          // VIROU_COMANDOs f
-        }
-      }
-  
-
-    }else if (Sp=='i'){
-      myRead();
-      if (myPeek()=='?'){
-        addCOMANDOs( 'I' );
-        // VIROU_COMANDOs I
-        myRead();
-      }else if (!jaTerminou()){
-        bool mudouImax = false;
-        int newImax = myParseInt();
-        if ( (newImax>=ImaxMINgeral) && (newImax<=ImaxMAXgeral) ){
-          mudouImax = true;
-        }
-        if ( mudouImax ){
-          addCOMANDOs( 'i', newImax );
-          // VIROU_COMANDOs i
-        }
-      }
-
-
-
-    }else if( (Sp=='o') || (Sp=='c') ){ 
-      // o-> off : o DtOff
-      // c-> on-off cycles : c DtOff, DtRep, nCiclos
-      myRead();
-      float DtOff = 0;
-      if (!jaTerminou()){
-        if (removeEspaco()=='*'){
-          removeEspaco( '*' );
-          DtOff = DelayT;
-        }else if (removeEspaco()==','){
-          removeEspaco( ',' );
-          DtOff = DelayT;
-        }else{
-          DtOff = myParseFloat();
-        }
-      }
-      if (DtOff==0)
-        DtOff = DelayT;
-      float DtRep = DelayTRep;
-      long nCiclos = 1;
-      if ( (Sp=='c') && (!jaTerminou()) ){
-        if (removeEspaco(',')=='*'){
-          removeEspaco( '*' );
-        }else{
-          DtRep = myParseFloat();
-        }
-        if (removeEspaco(',')=='*'){
-          nCiclos = 1;
-          removeEspaco( '*' );
-        }else{
-          if (jaTerminou()){
-            nCiclos = 1;
-          }else{
-            float valorCiclos = myParseFloat();
-            //Serial.println( valorCiclos );
-            if (valorCiclos>=0){
-              nCiclos = valorCiclos;
-              if (nCiclos==0)
-                nCiclos = 1;
-            }else{
-              nCiclos = (-valorCiclos + 0.5*DtRep)/DtRep;
-            }
-          }
-        }
-      }
-      if (DtRep==0.){
-        nCiclos = 1;
-      }
-      //if (ESCREVE){ Serial.println( char(Sp) ); }
-      if (nCiclos==1){
-        addCOMANDOs( 'o', (DtOff*1000uL) );        
-      }else{
-        addCOMANDOs( 'c', (DtOff*1000uL), 
-                      (DtRep*1000uL), nCiclos );
-      }
-      // VIROU_COMANDOs o, c
-      
-
-    }else if(Sp=='j'){ // j-> jump : j DF, DtRep, nJumps
-      myRead();
-      if (!jaTerminou()){
-        float DF;
-        float DtRep = DelayTRep;
-        long nJumps = 1;
-        DF = myParseInt();
-        if (!jaTerminou()){
-          if (removeEspaco()=='*'){
-            removeEspaco('*');
-          }else{
-            DtRep = myParseFloat();
-          }
-          if (!jaTerminou()){
-            float valorJumps = myParseFloat();
-            if (valorJumps>=0){
-              nJumps = valorJumps;
-              if (nJumps==0)
-                nJumps = 1;
-            }else{
-              nJumps = (-valorJumps + 0.5*DtRep)/DtRep;
-            }
-          }
-        }
-        if (DF!=0.){
-          if (DtRep==0.){
-            nJumps = 1;
-          }
-          //if (ESCREVE){ Serial.println( char(Sp) ); }
-          addCOMANDOs( 'j', nJumps, (DtRep*1000uL), DF );
-          // VIROU_COMANDOs j
-          // fazJumps( DF, DtRep_uL, nJumps);
-        }
-      }
-      
-
-    }else if( (Sp=='s') || (Sp=='S') || (Sp=='u') || (Sp=='d') ){ 
-      // s -> steps: s DF, Dt
-      // S -> steps: S DF, Steps, Dt
-      // u -> up:    u Dt
-      // d -> down:  d Dt
-      myRead();
-      float DF = 0.;
-      if (Sp=='u'){ // u -> up : u Dt
-        DF = +360.0;          
-      }else if (Sp=='d'){ // d -> down : d Dt
-        DF = -360.0;        
-      }else if ( (Sp=='s') || (Sp=='S') ){ // s,S
-          // s -> steps: s DF, Dt
-          // S -> steps: S DF, Steps, Dt
-        DF = myParseFloat();
-      }
-      long Steps= (Imax+1)*(abs(DF)/360.0);
-      if ( (Sp=='S') && (!jaTerminou()) ){
-        if (removeEspaco(',')=='!'){
-            removeEspaco('!');
-            Steps = 2*(Imax+1)*(abs(DF)/360.0);
-        }else if (removeEspaco(',')=='$'){
-            removeEspaco('$');
-            Steps = ((Imax+1)*(abs(DF)/360.0))/2;
-        }else{
-          Steps = myParseInt();
-        }
-      }
-      float Dt = DelayT;
-      if (!jaTerminou()){
-        if (removeEspaco(',')=='*'){
-          removeEspaco('*');
-        }else{
-          Dt = myParseFloat();
-          if (Dt==0.)
-            Dt = DelayT;
-        }
-      }
-      if ( (Steps>0) && (Dt>0.) ){
-        addCOMANDOs( 's', Steps, (Dt*1000uL), DF );
-        // VIROU_COMANDOs s
-      }
-
-
-    }else if(Sp=='h'){
-      myRead();
-      int Nivel=0;
-      if (jaTerminou())
-        removeEspaco(';');
-      else
-        Nivel = myParseInt();
-      mostraHelpComandos( Nivel!=0 );  
-
-
-    }else if(Sp=='A'){
-      myRead();
-      if (myPeek()=='?'){
-        addCOMANDOs('a');
-        // VIROU_COMANDOs a
-        myRead();
-      }else if (!jaTerminou()){
-        byte qualControle=100;
-        bool mudouValue = false;
-        bool mudouModo = false;
-        int newQual = myParseInt();
-        if (ehControleValido(newQual))
-          qualControle = newQual;
-        Sp = removeEspaco();
-        char strModo = ' ';
-        char strValue = ' ';
-        if (Sp=='L'){
-          strValue = 'L';
-          mudouValue = true;
-        }else if (Sp=='H'){
-          strValue = 'H';
-          mudouValue = true;
-        }else if (Sp=='I'){
-          strModo = 'I';
-          mudouModo = true;
-        }else if (Sp=='O'){
-          strModo = 'O';
-          mudouModo = true;
-        }else if (Sp=='P'){
-          strModo = 'I';
-          strValue = 'H';
-          mudouModo = true;
-          mudouValue = true;
-        }else if (Sp=='*'){ //para trocar estado (LOW->HIGH, H->L)
-          strValue = '*';
-          mudouValue = true;
-        }else if (Sp=='#'){ //para trocar tipo (INPUT->OUTPUT, O->I)
-          strModo = '#';
-          mudouModo = true;
-        }
-        if ((mudouValue)&&(!mudouModo)){
-          mudouModo = primeiroUsoControle[newQual];
-          if (mudouModo){ strModo = 'O'; }
-        }
-        primeiroUsoControle[newQual] = false;
-        removeEspaco(Sp,';');
-        if ( ehControleValido(qualControle) && 
-           ( (mudouValue) || (mudouModo) ) ){
-          addCOMANDOs('A',qualControle,strModo,strValue);
-          // VIROU_COMANDOs A
-        }
-      }
-
-
-
-    }else if (Sp=='B'){
-      myRead();
-      if (myPeek()=='?'){
-        mostraBotoes();
-        myRead();
-      }else{
-        int numBotao = myParseInt();
-        if ( ehBotaoValido(numBotao) && (inStr.charAt(0)=='>') ){
-          myRead();
-          int nextEnd = inStr.indexOf(endChar);
-          if (nextEnd>=0){
-            botoes[numBotao-1] = inStr.substring(0,nextEnd);
-            inStr.remove(0,nextEnd+1);
-            if (ESCREVE){ mostraBotoes(numBotao); }
-          }
-				}					
-      }
-      
-    }else if (Sp=='M'){
-      myRead();
-      if (myPeek()=='?'){
-        mostraMemos();
-        myRead();
-      }else{
-        int numMemo = myParseInt();
-        if ( ehMemoValido(numMemo) ){
-          inStr = memos[numMemo-1] + inStr;
-        }
-      }  
-
-
-
-    }else if (Sp=='>'){
-      myRead();
-      int numMemo = myParseInt();
-      if ((numMemo>=1) && (numMemo<=nMemos) && (inStr.charAt(0)==':') ){
-        myRead();
-        int nextEnd = inStr.indexOf(endChar);
-        if (nextEnd>=0){
-          memos[numMemo-1] = inStr.substring(0,nextEnd);
-          inStr.remove(0,nextEnd+1);
-          if (ESCREVE){ mostraMemos(numMemo); }
-        }
-      }
-
-
-
-    }else if (Sp=='R'){
-      myRead();
-      bool repeticaoValida = true;
-      if (myRead()!='('){
-        repeticaoValida = false;
-      }
-      if ((repeticaoValida)&&(inStr.length()>=1+2+1)){
-        long nLoop = myParseInt();
-        if ( inStr.startsWith(String("){")) ){
-          inStr.remove(0,2);
-          int endAt = inStr.indexOf('}');
-          if (endAt==-1)
-            endAt = inStr.length()-1;
-          String strARepetir = inStr.substring(0,endAt);
-          inStr.remove(0,endAt+1);
-          String novoLoop = "";
-          if (nLoop==0){
-            strARepetir = "";
-          }else if (nLoop>1){
-            novoLoop = String("l") + String(nLoop-1) +
-                       String(" ") + String(nCOMANDOs) +
-                       String(";");
-          }
-          inStr = strARepetir + novoLoop + inStr;
-        }
-      }
-    }else if (Sp=='l'){
-      myRead();
-      long nLoop = myParseInt();
-      int nCOMANDOInicioLoop = myParseInt();
-      addCOMANDOs( 'L', nLoop, nCOMANDOInicioLoop, nLoop );
-
-
-    
-    }else if(Sp=='_'){ // '_' define variavel global
-      myRead();
-      if (inStr.startsWith(String("DEBUG_"))){
-        inStr.remove(0,6);
-        if (inStr.startsWith(String("true"))){
-          inStr.remove(0,4);
-          DEBUG = true;
-        }else if (inStr.startsWith(String("false"))){
-          inStr.remove(0,5);
-          DEBUG = false;
-        }else if (inStr.startsWith(String("flip"))){
-          inStr.remove(0,4);
-          DEBUG = !DEBUG;
-        }
-      }else if (inStr.startsWith(String("ESCREVE_"))){
-        inStr.remove(0,8);
-        if (inStr.startsWith(String("true"))){
-          inStr.remove(0,4);
-          ESCREVE = true;
-        }else if (inStr.startsWith(String("false"))){
-          inStr.remove(0,5);
-          ESCREVE = false;
-        }else if (inStr.startsWith(String("flip"))){
-          inStr.remove(0,4);
-          ESCREVE = !ESCREVE;
-        }
-      }else if (inStr.startsWith(String("REVERSO_"))){
-        inStr.remove(0,8);
-        if (inStr.startsWith(String("true"))){
-          inStr.remove(0,4);
-          REVERSO = true;
-        }else if (inStr.startsWith(String("false"))){
-          inStr.remove(0,5);
-          REVERSO = false;
-        }else if (inStr.startsWith(String("flip"))){
-          inStr.remove(0,4);
-          REVERSO = !REVERSO;
-        }
-      }else if (inStr.startsWith(String("COMENTA_"))){
-        inStr.remove(0,8);
-        if (inStr.startsWith(String("true"))){
-          inStr.remove(0,4);
-          COMENTA = true;
-        }else if (inStr.startsWith(String("false"))){
-          inStr.remove(0,5);
-          COMENTA = false;
-        }else if (inStr.startsWith(String("flip"))){
-          inStr.remove(0,4);
-          COMENTA = !COMENTA;
-        }
-      }else if (inStr.startsWith(String("DtZeroPadrao_"))){
-        inStr.remove(0,13);
-        float newDtZero = myParseFloat();
-        if (newDtZero>0.){
-          DtZeroPadrao = newDtZero;
-          DtZero_uL = newDtZero*1000uL;
-        }
-      }else if (inStr.startsWith(String("DtZero_uL_"))){
-        inStr.remove(0,10);
-        unsigned long newDtZero_uL = myParseInt();
-        if (newDtZero_uL>0){
-          DtZero_uL = newDtZero_uL;
-          DtZeroPadrao = newDtZero_uL/1000.0;
-        }
-      }else if (inStr.startsWith(String("AVISATERMINOU_"))){
-        inStr.remove(0,14);
-        if (inStr.startsWith(String("true"))){
-          inStr.remove(0,4);
-          AVISATERMINOU = true;
-        }else if (inStr.startsWith(String("false"))){
-          inStr.remove(0,5);
-          AVISATERMINOU = false;
-        }else if (inStr.startsWith(String("flip"))){
-          inStr.remove(0,4);
-          AVISATERMINOU = !AVISATERMINOU;
-        }
-      }
-
-
-
-    }else if(Sp==39){ // 39 eh aspas simples
-      myRead();
-      int ondeFechaAspas = inStr.indexOf(39);
-      if (ondeFechaAspas==-1)
-        ondeFechaAspas = inStr.length();
-      if (COMENTA)
-        Serial.println( inStr.substring(0,ondeFechaAspas) );
-      inStr.remove(0,ondeFechaAspas+1);
-
-
-
-    }else{ // Se nao for nenhum comando conhecido
-      if (DEBUG){ Serial.println( inStr ); }
-      if (ESCREVE){
-        Serial.print( F("skipped: ") );
-        Serial.println( char(Sp) );
-      }
-      myRead();
-    }
-  }else if ((COMANDOsAtu==-1)&&(nCOMANDOs>0)){
-    COMANDOsAtu = 0;
+    InStr2Comandos();
+  }else if ((COMANDOsAtual==-1)&&(nCOMANDOs>0)){
+    COMANDOsAtual = 0;
     if (ESCREVE){
       for ( int i=0; i<nCOMANDOs; i++ ){
         Serial.print( COMANDOs[i] );
@@ -819,6 +231,8 @@ void loop() {
   }
 
 }
+// ---------- end of LOOP ---------------- end of LOOP ---------------
+// ---------- end of LOOP ---------------- end of LOOP ---------------
 // ---------- end of LOOP ---------------- end of LOOP ---------------
 
 
@@ -839,118 +253,6 @@ void addChar(){
   }
 }
 
-int myRead(){
-  int answer = -1;
-  if (inStr.length()>0){
-    answer = inStr.charAt(0);
-    inStr.remove(0,1);
-  }
-  return answer;
-}
-
-int myPeek(){
-  int answer = -1;
-  if (inStr.length()>0){
-    answer = inStr.charAt(0);
-  }
-  return answer;
-}
-
-long myParseInt(){
-  return (digitosStr()).toInt();
-}
-
-float myParseFloat(){
-  return (digitosStr()).toFloat();
-}
-
-int contaDigitosStr(){
-  bool lastOk = true;
-  int nDigOk = -1;
-  int nDig;
-  bool passouSeparador = false;
-  for (nDig=0; 
-      (nDig<inStr.length())&&(lastOk); nDig++){
-    char char_At = inStr.charAt(nDig);
-    lastOk = false;
-    if ( (char_At>='0')&&(char_At<='9') ){
-      lastOk = true;
-      if (nDigOk<0)
-        nDigOk = 0;
-      nDigOk++;
-    }else if ((!passouSeparador)&&(char_At=='.')){
-      passouSeparador = true;
-      lastOk = true;
-      if (nDigOk<0)
-        nDigOk = 0;
-      nDigOk++;
-    }else if (nDigOk<0){
-      if (char_At==' '){
-        lastOk = true;
-      }else if( (char_At=='+')||(char_At=='-') ){
-        lastOk = true;
-        nDigOk = 0;        
-      }
-    }
-  }
-  if (nDigOk<=0){
-    return -nDig;
-  }else{
-    return nDig;
-  }
-}
-String digitosStr(){
-  int nDig = contaDigitosStr();    
-  if (nDig<=0){
-    return String("");
-  }else{
-    String answer = (inStr.substring(0,nDig-1));
-    inStr.remove(0,nDig-1);
-    return answer;
-  }
-}
-
-
-byte removeEspaco(){
-  return removeEspaco(' ',' ');
-}
-byte removeEspaco(byte oqueMais){
-  return removeEspaco(oqueMais,' ');  
-}
-byte removeEspaco(byte oqueMais1, byte oqueMais2){
-  int nextChar;
-  bool removendo = true;
-  while(removendo){
-    unsigned long tEnd = micros() + TIME_OUT*1000uL;
-    do{
-      nextChar = myPeek();
-    }while( (nextChar==-1) && (micros()<tEnd) );
-    removendo = false;
-    if ( (nextChar==' ')||(nextChar==oqueMais1)||(nextChar==oqueMais2) ){
-      removendo = true;
-      myRead();
-    }
-  }
-  if (nextChar==-1)
-    nextChar = 0;
-  return byte(nextChar);
-}
-
-
-bool jaTerminou(){
-  byte terminouChar[] = { ';', 'w', 't', 'p', 'f',
-                          'o', 'c', 'j', '?', 'h',   
-                          'i', 's', 'S', 'u', 'd',
-                          'W', 'T', '[', 'l', 'A',
-                          'M', '>', 'R', 'B', 10, 13, 39 };
-  int nTerminouChar = sizeof(terminouChar)/sizeof(terminouChar[0]);
-  byte pChar = removeEspaco(',');
-  bool achou = false;
-  for ( int nAtu=0; (!achou)&&(nAtu<nTerminouChar); nAtu++ ){
-    achou = (pChar==terminouChar[nAtu]);
-  }
-  return achou;
-}
 
 
 bool ehControleValido(int n){
@@ -965,92 +267,3 @@ bool ehBotaoValido(int n){
   return ((n>=1)&&(n<=nBotoes));
 }
 
-void verificaColchetes(){
-  int abreColchetes = inStr.indexOf('[');
-  while (abreColchetes>=0){
-    int ondeSeta = inStr.indexOf('>');
-    if ( (ondeSeta==-1) || (ondeSeta>abreColchetes) ){
-      int fechaColchetes = inStr.indexOf(']');
-      if (fechaColchetes>abreColchetes){
-        int numeroMemoColchete = inStr.substring(
-            abreColchetes+1,fechaColchetes).toInt();
-        if (ehMemoValido(numeroMemoColchete)){
-          inStr = inStr.substring(0,abreColchetes) +
-                  memos[numeroMemoColchete-1] +
-                  inStr.substring(fechaColchetes+1);
-        }
-      }
-      abreColchetes = inStr.indexOf('[');
-    }else{
-      abreColchetes = -1;
-    }
-  }
-}
-
-
-void apaga1COMANDO(int QUAL){
-  // COMANDOs, int1COMANDOs, int2COMANDOs, float1COMANDOs
-  // float2COMANDOs, str1COMANDOs, str2COMANDOs, int3COMANDOs 
-  COMANDOs[QUAL] = ' ';
-  int1COMANDOs[QUAL] = 0L;
-  int2COMANDOs[QUAL] = 0L;
-  float1COMANDOs[QUAL] = 0.;
-  float2COMANDOs[QUAL] = 0.;
-  str1COMANDOs[QUAL] = ' ';
-  str2COMANDOs[QUAL] = ' ';
-  int3COMANDOs[QUAL] = 0L;
-}
-void apagaCOMANDOs(){
-  for (int i=0; i<nCOMANDOsMax; i++){
-    apaga1COMANDO(i);
-  }
-  nCOMANDOs = 0;
-  COMANDOsAtu = -1;
-}
-
-void addCOMANDOs(char newC, long int1, char str1, char str2){
-  addCOMANDOs( newC, int1, 0L, 0., 0., str1, str2, 0L);
-}
-
-void addCOMANDOs(char newC){
-  addCOMANDOs( newC, 0L, 0L, 0., 0., ' ', ' ', 0L);
-}
-void addCOMANDOs( char newC, long int1 ){
-  addCOMANDOs( newC, int1, 0L, 0., 0., ' ', ' ', 0L );
-}
-void addCOMANDOs( char newC, long int1, long int2 ){
-  addCOMANDOs( newC, int1, int2, 0., 0., ' ', ' ', 0L );
-}
-void addCOMANDOs( char newC, long int1, long int2, long int3 ){
-  addCOMANDOs( newC, int1, int2, 0., 0., ' ', ' ', int3 );
-}
-void addCOMANDOs( char newC, long int1, long int2, float float1 ){
-  addCOMANDOs( newC, int1, int2, float1, 0., ' ', ' ', 0L );
-}
-void addCOMANDOs( char newC, long int1, long int2, float float1, 
-                  float float2){
-  addCOMANDOs( newC, int1, int2, float1, float2, ' ', ' ', 0L );
-}
-void addCOMANDOs( char newC, long int1, long int2, float float1, 
-                  float float2, char str1 ){
-  addCOMANDOs( newC, int1, int2, float1, float2, str1, ' ', 0L );
-}
-void addCOMANDOs(char newC, long int1, long int2, float float1, 
-                float float2, char str1, char str2){
-addCOMANDOs( newC, int1, int2, float1, float2, str1, str2, 0L);
-}
-void addCOMANDOs(char newC, long int1, long int2, float float1, 
-                float float2, char str1, char str2, long int3){
-  if (nCOMANDOs<nCOMANDOsMax){
-    int QUAL = nCOMANDOs;
-    COMANDOs[QUAL] = newC;
-    int1COMANDOs[QUAL] = int1;
-    int2COMANDOs[QUAL] = int2;
-    float1COMANDOs[QUAL] = float1;
-    float2COMANDOs[QUAL] = float2;
-    str1COMANDOs[QUAL] = str1;
-    str2COMANDOs[QUAL] = str2;
-    nCOMANDOs += 1;
-    int3COMANDOs[QUAL] = int3;
-  }
-}

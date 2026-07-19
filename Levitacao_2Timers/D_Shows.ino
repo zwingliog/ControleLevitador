@@ -1,7 +1,7 @@
 // Shows - (rotinas para mostrar valores)
 
 void mostraImax(){
-  Serial.print( F("iMax=") );
+  Serial.print( F("i=") );
   Serial.print( Imax );
   Serial.print( F(" (") );
   Serial.print( 8000.0/(Imax+1) );
@@ -10,9 +10,9 @@ void mostraImax(){
 
 
 void mostraFase(){
-  Serial.print( F("phase=") );
+  Serial.print( F("f=") );
   Serial.println( faseAtual );
-  Serial.print( F("real phase=") );
+  Serial.print( F("fR=") );
   Serial.println( faseAtualReal );
 }
 
@@ -24,24 +24,30 @@ void mostraPot(){
     Serial.println( F(" :off*2") );
   }else if (potAtual==1){
     Serial.println( F(" :on*2") );
-  }else if (potAtual==2){
+  }else if ((potAtual==2) || (potAtual==-2)){
     Serial.println( F(" :on-off") );
-  }else if (potAtual==3){
+  }else if ((potAtual==3) || (potAtual==-1)){
     Serial.println( F(" :off-on") );
   }
 }
 
-
 void mostraDelayT(){
-  Serial.print( F("DelayT=") );
-  Serial.println( DelayT );
-  Serial.print( F("DelayTRep=") );
-  Serial.println( DelayTRep );
+  mostraDelayT('*');
+}
+void mostraDelayT(char QUAL){
+  if ( (QUAL=='*') || (QUAL=='t') ){
+    Serial.print( 't' );
+    Serial.println( DelayT );
+  }
+  if ( (QUAL=='*') || (QUAL=='T') ){
+    Serial.print( 'T' );
+    Serial.println( DelayTRep );
+  }
 }
 
 
 void mostraBotoes(){
-  Serial.print( F("number of botoes: ") );
+  Serial.print( F("nBotoes: ") );
   Serial.println( nBotoes );
   for (int i=1; i<=nBotoes; i++){  
     mostraBotoes(i);
@@ -60,7 +66,7 @@ void mostraBotoes( int QUAL){
 
 
 void mostraMemos(){
-  Serial.print( F("number of memos: ") );
+  Serial.print( F("nMemos: ") );
   Serial.println( nMemos );
   for (int i=1; i<=nMemos; i++){  
     mostraMemos(i);
@@ -113,4 +119,20 @@ void mostraStatus(){
   mostraControles();
   //Serial.print( F("micros/1e6=") );
   //Serial.println( micros()/1e6 );
+}
+
+
+
+void mostraDtZero(){
+  Serial.print( F("DtZero=") );
+  Serial.print( DtZeroPadrao );
+  Serial.println( F(" ms") );
+}
+
+
+
+void mostraVar( String nomeVar, bool VarBool ){
+  Serial.print( nomeVar );
+  Serial.print( ":");
+  Serial.println( VarBool );
 }
